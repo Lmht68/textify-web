@@ -1,5 +1,10 @@
 import { useMemo } from 'react';
-import { buildReadingParagraphs, formatClockTime, formatLanguageName } from '../utils/transcriptReading';
+import {
+  buildReadingParagraphs,
+  buildTextOnlyParagraphs,
+  formatClockTime,
+  formatLanguageName,
+} from '../utils/transcriptReading';
 import type { TranscriptView, TranscriptionResult } from '../types';
 
 type CompletedTranscriptProps = Readonly<{
@@ -13,14 +18,19 @@ export const CompletedTranscript = ({
   transcriptView,
   onTranscriptViewChange,
 }: CompletedTranscriptProps) => {
-  const readingParagraphs = useMemo(() => buildReadingParagraphs(result.transcript.segments), [result.transcript.segments]);
-  const hasTimedSegments = readingParagraphs.length > 0;
+  const hasTimedSegments = result.transcript.segments.some((segment) => segment.text.trim().length > 0);
   const isTimestamped = transcriptView === 'timestamped' && hasTimedSegments;
-  const paragraphs = hasTimedSegments
-    ? readingParagraphs
-    : result.transcript.text.trim().length > 0
-      ? [{ text: result.transcript.text.trim(), start: null }]
-      : [];
+  const paragraphs = useMemo(() => {
+    const selectedParagraphs = isTimestamped
+      ? buildReadingParagraphs(result.transcript.segments)
+      : buildTextOnlyParagraphs(result.transcript.segments);
+
+    return selectedParagraphs.length > 0
+      ? selectedParagraphs
+      : result.transcript.text.trim().length > 0
+        ? [{ text: result.transcript.text.trim(), start: null }]
+        : [];
+  }, [isTimestamped, result.transcript.segments, result.transcript.text]);
   const sourceLabel = result.source.title.trim() || result.source.url;
 
   return (

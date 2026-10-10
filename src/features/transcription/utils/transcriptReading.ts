@@ -28,9 +28,10 @@ type RunText = Readonly<{
 type SentenceDetection = Readonly<{
   sentences: ReadonlyArray<CompletedSentence>;
   trailingText: string;
+  trailingStart: number | null;
 }>;
 
-const sentenceEndingPattern = /[.!?。！？]+["'’”)\]}]*(?=\s|$)/gu;
+const sentenceEndingPattern = /(?:[!?。！？]+|(?<!\.)\.(?!\.))["'’”)\]}]*(?=\s|$)/gu;
 const displayNames =
   typeof Intl.DisplayNames === 'undefined' ? null : new Intl.DisplayNames(['en'], { type: 'language' });
 
@@ -109,16 +110,17 @@ const detectSentences = ({ text, ranges }: RunText): SentenceDetection => {
     sentenceStartOffset = sentenceEndOffset;
   }
 
-  return { sentences, trailingText: text.slice(sentenceStartOffset).trim() };
+  const trailingRange = text.slice(sentenceStartOffset);
+  const trailingText = trailingRange.trim();
+  const trailingStart =
+    trailingText.length > 0
+      ? sourceStartForOffset(ranges, sentenceStartOffset + trailingRange.search(/\S/u))
+      : null;
+
+  return { sentences, trailingText, trailingStart };
 };
 
-const paragraphsFromCompletedSentences = (runText: RunText): ReadonlyArray<ReadingParagraph> => {
-  const { sentences, trailingText: remainder } = detectSentences(runText);
-
-  if (sentences.length === 0) {
-    return [];
-  }
-
+const paragraphsFromSentences = (sentences: ReadonlyArray<CompletedSentence>): Array<ReadingParagraph> => {
   const paragraphs: Array<ReadingParagraph> = [];
   let sentenceIndex = 0;
 
@@ -133,6 +135,18 @@ const paragraphsFromCompletedSentences = (runText: RunText): ReadonlyArray<Readi
     });
     sentenceIndex += sentenceCount;
   }
+
+  return paragraphs;
+};
+
+const paragraphsFromCompletedSentences = (runText: RunText): ReadonlyArray<ReadingParagraph> => {
+  const { sentences, trailingText: remainder } = detectSentences(runText);
+
+  if (sentences.length === 0) {
+    return [];
+  }
+
+  const paragraphs = paragraphsFromSentences(sentences);
 
 
   if (remainder.length > 0) {
@@ -181,6 +195,18 @@ export const buildReadingParagraphs = (segments: ReadonlyArray<TimedSegment>): R
     }
 
     paragraphs.push(...fallbackParagraphs(run.segments));
+  }
+
+  return paragraphs;
+};
+
+export const buildTextOnlyParagraphs = (segments: ReadonlyArray<TimedSegment>): ReadonlyArray<ReadingParagraph> => {
+  const runText = textForRun(segments);
+  const { sentences, trailingText, trailingStart } = detectSentences(runText);
+  const paragraphs = paragraphsFromSentences(sentences);
+
+  if (trailingText.length > 0 && trailingStart !== null) {
+    paragraphs.push({ text: trailingText, start: trailingStart });
   }
 
   return paragraphs;
