@@ -124,3 +124,45 @@ export const replacementSucceededJob = {
     self: replacementTranscriptionStatusUrl,
   },
 } as const;
+
+export const readingSucceededJob = {
+  id: fakeCapabilityId,
+  status: 'finished',
+  outcome: 'succeeded',
+  submitted_at: '2026-01-01T00:00:00Z',
+  started_at: '2026-01-01T00:00:01Z',
+  finished_at: '2026-01-01T00:00:02Z',
+  result: {
+    source: {
+      platform: 'youtube',
+      video_id: 'AbCdEf12345',
+      url: sourceUrl,
+      title: 'How small teams ship faster',
+      description: '',
+      channel: 'Textify',
+      duration_seconds: 3665,
+    },
+    transcript: {
+      method: 'youtube_captions',
+      language: 'en',
+      text:
+        'First sentence. Second sentence. Third sentence. Fourth sentence. Fifth sentence. Sixth fragment seventh fragment eighth fragment ninth fragment Hour sentence one. Hour sentence two.',
+      segments: [
+        { start: 0, end: 1, text: 'First sentence.' },
+        { start: 1, end: 2, text: 'Second sentence.' },
+        { start: 2, end: 3, text: 'Third sentence.' },
+        { start: 3, end: 4, text: 'Fourth sentence.' },
+        { start: 4, end: 5, text: 'Fifth sentence.' },
+        { start: 8.01, end: 9, text: 'Sixth fragment' },
+        { start: 12, end: 13, text: 'seventh fragment' },
+        { start: 13.5, end: 14, text: 'eighth fragment' },
+        { start: 14.5, end: 15, text: 'ninth fragment' },
+        { start: 3661.9, end: 3662.5, text: 'Hour sentence one.' },
+        { start: 3662.5, end: 3663, text: 'Hour sentence two.' },
+      ],
+    },
+  },
+  links: {
+    self: transcriptionStatusUrl,
+  },
+} as const;

@@ -8,14 +8,20 @@ import {
 } from '../services/currentTranscriptionStorage';
 import { cancelTranscriptionJob, inspectTranscriptionJob, submitTranscriptionJob } from '../services/transcriptionJobs';
 import type { StoredCurrentTranscription } from '../services/currentTranscriptionStorage';
-import type { CapabilityLinks, TranscriptionResult } from '../types';
+import type { CapabilityLinks, TranscriptionResult, TranscriptView } from '../types';
 
 export type TranscriptionFlowState =
   | Readonly<{ status: 'idle' }>
   | Readonly<{ status: 'submitting'; operationId: string; submittedUrl: string }>
   | Readonly<{ status: 'queued'; operationId: string; submittedUrl: string; links: CapabilityLinks; restored: boolean }>
   | Readonly<{ status: 'processing'; operationId: string; submittedUrl: string; links: CapabilityLinks; restored: boolean }>
-  | Readonly<{ status: 'succeeded'; operationId: string; submittedUrl: string; result: TranscriptionResult }>
+  | Readonly<{
+      status: 'succeeded';
+      operationId: string;
+      submittedUrl: string;
+      result: TranscriptionResult;
+      transcriptView: TranscriptView;
+    }>
   | Readonly<{ status: 'error'; submittedUrl: string; message: string }>;
 
 export type UseTranscriptionFlowResult = Readonly<{
@@ -26,6 +32,7 @@ export type UseTranscriptionFlowResult = Readonly<{
   noticeMessage: string | null;
   submit: () => Promise<void>;
   cancel: () => void;
+  selectTranscriptView: (transcriptView: TranscriptView) => void;
 }>;
 
 const submissionErrorMessage = "Textify couldn't start this transcript. Check the link and try again.";
@@ -52,6 +59,7 @@ const stateFromStoredCurrentTranscription = (snapshot: StoredCurrentTranscriptio
       operationId: snapshot.operationId,
       submittedUrl: snapshot.submittedUrl,
       result: snapshot.result,
+      transcriptView: snapshot.transcriptView,
     };
   }
 
@@ -171,6 +179,7 @@ export const useTranscriptionFlow = (): UseTranscriptionFlowResult => {
               operationId: state.operationId,
               submittedUrl: state.submittedUrl,
               result: inspection.result,
+              transcriptView: 'text-only',
             };
 
             if (persistCurrentSnapshot(state.operationId, completedSnapshot)) {
@@ -182,6 +191,7 @@ export const useTranscriptionFlow = (): UseTranscriptionFlowResult => {
               operationId: state.operationId,
               submittedUrl: state.submittedUrl,
               result: inspection.result,
+              transcriptView: 'text-only',
             });
             return;
           }
@@ -232,6 +242,43 @@ export const useTranscriptionFlow = (): UseTranscriptionFlowResult => {
     setValidationMessage(null);
     setNoticeMessage(null);
   }, []);
+
+  const selectTranscriptView = useCallback(
+    (transcriptView: TranscriptView) => {
+      if (
+        state.status !== 'succeeded' ||
+        state.transcriptView === transcriptView ||
+        (transcriptView === 'timestamped' &&
+          !state.result.transcript.segments.some((segment) => segment.text.trim().length > 0))
+      ) {
+        return;
+      }
+
+      const completedSnapshot: StoredCurrentTranscription = {
+        version: 1,
+        kind: 'completed',
+        operationId: state.operationId,
+        submittedUrl: state.submittedUrl,
+        result: state.result,
+        transcriptView,
+      };
+
+      if (persistedOperationIdRef.current === state.operationId) {
+        const storageUpdate = updateStoredCurrentTranscription({
+          expectedOperationId: state.operationId,
+          snapshot: completedSnapshot,
+        });
+
+        if (storageUpdate === 'superseded') {
+          applyStoredCurrentTranscription(readStoredCurrentTranscription());
+          return;
+        }
+      }
+
+      setState({ ...state, transcriptView });
+    },
+    [applyStoredCurrentTranscription, state],
+  );
 
   const cancel = useCallback(() => {
     if (state.status !== 'queued' && state.status !== 'processing') {
@@ -341,5 +388,5 @@ export const useTranscriptionFlow = (): UseTranscriptionFlowResult => {
     }
   }, [inputValue, persistCurrentSnapshot, state]);
 
-  return { inputValue, state, validationMessage, noticeMessage, setInputValue, submit, cancel };
+  return { inputValue, state, validationMessage, noticeMessage, setInputValue, submit, cancel, selectTranscriptView };
 };

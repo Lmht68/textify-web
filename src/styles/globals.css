@@ -179,14 +179,15 @@ button:disabled {
 }
 
 .transcription-flow {
-  width: min(100%, 44rem);
-  margin: 0 auto;
+  width: 100%;
 }
 
 .transcription-form {
   display: grid;
+  width: min(100%, 44rem);
   grid-template-columns: minmax(0, 1fr) auto;
   gap: 0.75rem;
+  margin: 0 auto;
 }
 
 .transcription-input,
@@ -263,7 +264,8 @@ button:disabled {
 }
 
 .validation-message {
-  margin: 0.75rem 0 0;
+  width: min(100%, 44rem);
+  margin: 0.75rem auto 0;
   color: #b42318;
   font-size: 0.875rem;
   font-weight: 600;
@@ -272,10 +274,10 @@ button:disabled {
 
 .transcription-active,
 .transcription-error,
-.transcription-notice,
-.completed-transcript {
-  margin-top: 2rem;
+.transcription-notice {
+  width: min(100%, 44rem);
   padding: 1.5rem;
+  margin: 2rem auto 0;
   background: var(--surface);
   border: 1px solid var(--border);
   border-radius: 0.9rem;
@@ -350,18 +352,196 @@ button:disabled {
   line-height: 1.55;
 }
 
-.completed-transcript h2 {
-  margin: 0;
-  font-size: 1.25rem;
-  font-weight: 750;
-  letter-spacing: -0.02em;
+.completed-transcript {
+  display: grid;
+  width: min(100%, 52rem);
+  gap: 1.5rem;
+  padding: 0;
+  margin: 2rem auto 0;
+  background: transparent;
+  border: 0;
+  border-radius: 0;
+  text-align: left;
 }
 
-.completed-transcript p {
-  margin: 1rem 0 0;
+.transcript-source-card,
+.transcript-reading-card {
+  min-width: 0;
+  padding: 1.5rem;
+  background: var(--surface);
+  border: 1px solid var(--border);
+  border-radius: 0.9rem;
+}
+
+.source-details {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 1.25rem;
+  margin: 0;
+}
+
+.source-detail {
+  min-width: 0;
+}
+
+.source-detail-link {
+  grid-column: 1 / -1;
+}
+
+.source-detail dt {
+  color: var(--muted-text);
+  font-size: 0.7rem;
+  font-weight: 800;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+}
+
+.source-detail dd {
+  min-width: 0;
+  margin: 0.3rem 0 0;
+  color: var(--text);
+  line-height: 1.4;
+  overflow-wrap: anywhere;
+}
+
+.source-link {
+  display: block;
+  overflow: hidden;
+  color: var(--text);
+  font-weight: 700;
+  text-decoration-color: color-mix(in srgb, var(--text) 55%, transparent);
+  text-decoration-line: underline;
+  text-decoration-thickness: 1px;
+  text-underline-offset: 0.16em;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.source-link:hover,
+.source-link:focus-visible {
+  color: var(--accent);
+  text-decoration-color: currentColor;
+  text-decoration-thickness: 2px;
+}
+
+.transcript-reading-card {
+  display: grid;
+  gap: 1.5rem;
+}
+
+.transcript-view {
+  display: grid;
+  width: min(100%, 17rem);
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  padding: 0.25rem;
+  background: var(--quiet-surface);
+  border-radius: 0.75rem;
+}
+
+.transcript-view-option {
+  position: relative;
+  display: grid;
+  min-width: 0;
+  min-height: 2.75rem;
+  cursor: pointer;
+}
+
+.transcript-view-option input {
+  position: absolute;
+  inset: 0;
+  opacity: 0;
+}
+
+.transcript-view-option span {
+  display: grid;
+  min-width: 0;
+  min-height: 2.75rem;
+  padding: 0 0.35rem;
+  color: var(--muted-text);
+  border: 1px solid transparent;
+  font-size: 0.875rem;
+  font-weight: 700;
+  line-height: 1.2;
+  text-align: center;
+  white-space: nowrap;
+  place-items: center;
+}
+
+.transcript-view-option input:checked + span {
+  color: var(--text);
+  background: var(--surface);
+  border: 1px solid var(--border);
+  border-radius: 0.55rem;
+  box-shadow: 0 1px 2px color-mix(in srgb, var(--text) 10%, transparent);
+}
+
+.transcript-view-option input:focus-visible {
+  outline: 0;
+}
+
+.transcript-view-option input:focus-visible + span {
+  outline: 3px solid color-mix(in srgb, var(--accent) 75%, white);
+  outline-offset: 2px;
+}
+
+.transcript-view-option input:disabled + span {
+  color: color-mix(in srgb, var(--muted-text) 65%, var(--surface));
+  cursor: not-allowed;
+}
+
+.reading-paragraphs {
+  min-width: 0;
+}
+
+.reading-paragraph {
+  min-width: 0;
+  margin: 0;
   color: var(--text);
   line-height: 1.75;
+  overflow-wrap: anywhere;
   white-space: pre-wrap;
+}
+
+.reading-paragraphs-text-only {
+  display: grid;
+  gap: 1.5rem;
+}
+
+.reading-paragraphs-timestamped {
+  display: grid;
+}
+
+.timestamped-row {
+  display: grid;
+  min-width: 0;
+  grid-template-columns: 4rem minmax(0, 1fr);
+  gap: 1.25rem;
+  padding: 1.25rem 0;
+}
+
+.timestamped-row + .timestamped-row {
+  border-top: 1px solid var(--border);
+}
+
+.timestamped-row:first-child {
+  padding-top: 0;
+}
+
+.timestamped-row:last-child {
+  padding-bottom: 0;
+}
+
+.timestamp {
+  color: var(--muted-text);
+  font-size: 0.875rem;
+  font-variant-numeric: tabular-nums;
+  line-height: 1.75;
+}
+
+.empty-transcript {
+  margin: 0;
+  color: var(--muted-text);
+  line-height: 1.75;
 }
 
 .reading-section {
@@ -555,9 +735,22 @@ button:disabled {
 
   .transcription-active,
   .transcription-error,
-  .transcription-notice,
-  .completed-transcript {
+  .transcription-notice {
     padding: 1.2rem;
+  }
+
+  .transcript-source-card,
+  .transcript-reading-card {
+    padding: 1rem;
+  }
+
+  .transcript-view {
+    width: 100%;
+  }
+
+  .timestamped-row {
+    grid-template-columns: minmax(0, 1fr);
+    gap: 0.3rem;
   }
 
   .transcription-cancel {

@@ -1,6 +1,6 @@
 import { z } from 'zod';
 import { activeLinksSchema, transcriptionResultSchema } from './transcriptionSchemas';
-import type { CapabilityLinks, TranscriptionResult } from '../types';
+import type { CapabilityLinks, TranscriptionResult, TranscriptView } from '../types';
 
 export const currentTranscriptionStorageKey = 'textify.current-transcription';
 
@@ -42,6 +42,7 @@ const completedSnapshotSchema = z
     operationId: operationIdSchema,
     submittedUrl: submittedUrlSchema,
     result: transcriptionResultSchema,
+    transcriptView: z.enum(['text-only', 'timestamped']).default('text-only'),
   })
   .strict();
 
@@ -69,6 +70,7 @@ export type StoredCurrentTranscription =
       operationId: string;
       submittedUrl: string;
       result: TranscriptionResult;
+      transcriptView: TranscriptView;
     }>;
 
 type StorageWriteResult = 'written' | 'unavailable';

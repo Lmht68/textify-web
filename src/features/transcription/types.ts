@@ -9,6 +9,8 @@ export type TimedSegment = Readonly<{
   text: string;
 }>;
 
+export type TranscriptView = 'text-only' | 'timestamped';
+
 export type TranscriptionSource = Readonly<{
   platform: 'youtube' | 'instagram' | 'facebook' | 'tiktok' | 'x';
   video_id: string;

@@ -4,7 +4,8 @@ import { TranscriptionForm } from './components/TranscriptionForm';
 import { useTranscriptionFlow } from './hooks/useTranscriptionFlow';
 
 export const TranscriptionFlow = () => {
-  const { inputValue, state, validationMessage, noticeMessage, setInputValue, submit, cancel } = useTranscriptionFlow();
+  const { inputValue, state, validationMessage, noticeMessage, setInputValue, submit, cancel, selectTranscriptView } =
+    useTranscriptionFlow();
   const isSubmitting = state.status === 'submitting';
   const activeState = isSubmitting || state.status === 'queued' || state.status === 'processing' ? state : null;
   let lifecycleMessage = '';
@@ -56,7 +57,13 @@ export const TranscriptionFlow = () => {
           <p>{state.message}</p>
         </article>
       ) : null}
-      {state.status === 'succeeded' ? <CompletedTranscript result={state.result} /> : null}
+      {state.status === 'succeeded' ? (
+        <CompletedTranscript
+          result={state.result}
+          transcriptView={state.transcriptView}
+          onTranscriptViewChange={selectTranscriptView}
+        />
+      ) : null}
     </section>
   );
 };
