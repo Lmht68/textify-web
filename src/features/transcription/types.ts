@@ -38,6 +38,11 @@ export type SubmitTranscriptionJobResult =
   | Readonly<{ kind: 'unavailable' }>
   | Readonly<{ kind: 'contract-error' }>;
 
+export type CancelTranscriptionJobResult =
+  | Readonly<{ kind: 'accepted' }>
+  | Readonly<{ kind: 'contract-error' }>
+  | Readonly<{ kind: 'unavailable' }>;
+
 export type InspectTranscriptionJobResult =
   | Readonly<{ kind: 'queued'; links: CapabilityLinks }>
   | Readonly<{ kind: 'processing'; links: CapabilityLinks }>

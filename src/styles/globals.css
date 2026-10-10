@@ -272,6 +272,7 @@ button:disabled {
 
 .transcription-active,
 .transcription-error,
+.transcription-notice,
 .completed-transcript {
   margin-top: 2rem;
   padding: 1.5rem;
@@ -309,6 +310,24 @@ button:disabled {
   line-height: 1.6;
 }
 
+.transcription-cancel {
+  min-height: 2.75rem;
+  padding: 0 1rem;
+  margin-top: 1.25rem;
+  color: var(--text);
+  background: transparent;
+  border: 1px solid var(--border);
+  border-radius: 0.65rem;
+  font-weight: 700;
+}
+
+.transcription-cancel:hover,
+.transcription-cancel:focus-visible {
+  color: var(--accent);
+  border-color: var(--accent);
+  background: color-mix(in srgb, var(--accent) 8%, transparent);
+}
+
 .transcription-error {
   border-color: #e9b6b1;
 }
@@ -316,6 +335,17 @@ button:disabled {
 .transcription-error p {
   margin: 0;
   color: #8f1d17;
+  font-weight: 600;
+  line-height: 1.55;
+}
+
+.transcription-notice {
+  border-color: color-mix(in srgb, var(--accent) 35%, var(--border));
+}
+
+.transcription-notice p {
+  margin: 0;
+  color: var(--text);
   font-weight: 600;
   line-height: 1.55;
 }
@@ -525,8 +555,13 @@ button:disabled {
 
   .transcription-active,
   .transcription-error,
+  .transcription-notice,
   .completed-transcript {
     padding: 1.2rem;
+  }
+
+  .transcription-cancel {
+    width: 100%;
   }
 
   .reading-section {

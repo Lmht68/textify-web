@@ -4,9 +4,9 @@ import { TranscriptionForm } from './components/TranscriptionForm';
 import { useTranscriptionFlow } from './hooks/useTranscriptionFlow';
 
 export const TranscriptionFlow = () => {
-  const { inputValue, state, validationMessage, setInputValue, submit } = useTranscriptionFlow();
-  const isWorking = state.status === 'submitting' || state.status === 'queued' || state.status === 'processing';
-  const activeState = isWorking ? state : null;
+  const { inputValue, state, validationMessage, noticeMessage, setInputValue, submit, cancel } = useTranscriptionFlow();
+  const isSubmitting = state.status === 'submitting';
+  const activeState = isSubmitting || state.status === 'queued' || state.status === 'processing' ? state : null;
   let lifecycleMessage = '';
 
   switch (state.status) {
@@ -31,16 +31,25 @@ export const TranscriptionFlow = () => {
     <section id="transcription-form" className="transcription-flow" aria-label="Start a transcription">
       <TranscriptionForm
         inputValue={inputValue}
-        isWorking={isWorking}
+        isSubmitting={isSubmitting}
         validationMessage={validationMessage}
         onInputValueChange={setInputValue}
         onSubmit={submit}
       />
+      {state.status === 'idle' && noticeMessage !== null ? (
+        <article className="transcription-notice" role="alert">
+          <p>{noticeMessage}</p>
+        </article>
+      ) : null}
       <div className="visually-hidden" role="status" aria-live="polite" aria-atomic="true">
         {lifecycleMessage}
       </div>
       {activeState === null ? null : (
-        <ActiveTranscription submittedUrl={activeState.submittedUrl} statusMessage={lifecycleMessage} />
+        <ActiveTranscription
+          submittedUrl={activeState.submittedUrl}
+          statusMessage={lifecycleMessage}
+          onCancel={state.status === 'queued' || state.status === 'processing' ? cancel : null}
+        />
       )}
       {state.status === 'error' ? (
         <article className="transcription-error" role="alert">

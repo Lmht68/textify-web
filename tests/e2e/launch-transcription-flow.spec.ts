@@ -69,7 +69,8 @@ test('should poll every two seconds and render completed text when the backend c
   await expect(activeTranscription.getByText('Getting your transcript ready', { exact: true })).toBeVisible();
   await expect(activeTranscription.getByText(sourceUrl, { exact: true })).toBeVisible();
   await expect(activeTranscription.getByText("We'll check again in 2 seconds. You can leave this tab open.")).toBeVisible();
-  await expect(page.getByRole('button', { name: 'Working...' })).toBeDisabled();
+  await expect(page.getByRole('button', { name: 'Transcribe' })).toBeEnabled();
+  await expect(page.getByLabel('Video link')).toBeEnabled();
   expect(postBodies).toEqual([JSON.stringify({ url: sourceUrl })]);
 
   await page.clock.fastForward(1_999);

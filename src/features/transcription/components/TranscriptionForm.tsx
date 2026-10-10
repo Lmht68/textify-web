@@ -5,7 +5,7 @@ type SupportedPlatform = 'youtube' | 'tiktok' | 'instagram' | 'facebook' | 'x';
 
 type TranscriptionFormProps = Readonly<{
   inputValue: string;
-  isWorking: boolean;
+  isSubmitting: boolean;
   validationMessage: string | null;
   onInputValueChange: (value: string) => void;
   onSubmit: () => Promise<void>;
@@ -63,7 +63,7 @@ const PlatformIcon = ({ platform }: { readonly platform: SupportedPlatform }) =>
   );
 };
 
-export const TranscriptionForm = ({ inputValue, isWorking, validationMessage, onInputValueChange, onSubmit }: TranscriptionFormProps) => {
+export const TranscriptionForm = ({ inputValue, isSubmitting, validationMessage, onInputValueChange, onSubmit }: TranscriptionFormProps) => {
   const inputRef = useRef<HTMLInputElement>(null);
 
   useEffect(() => {
@@ -95,10 +95,10 @@ export const TranscriptionForm = ({ inputValue, isWorking, validationMessage, on
           onChange={(event) => onInputValueChange(event.target.value)}
           aria-invalid={validationMessage !== null}
           aria-describedby={validationMessage === null ? undefined : 'video-link-validation'}
-          disabled={isWorking}
+          disabled={isSubmitting}
         />
-        <button className="transcription-submit" type="submit" disabled={isWorking}>
-          {isWorking ? 'Working...' : 'Transcribe'}
+        <button className="transcription-submit" type="submit" disabled={isSubmitting}>
+          {isSubmitting ? 'Working...' : 'Transcribe'}
         </button>
       </form>
       {validationMessage === null ? null : (

@@ -1,5 +1,6 @@
 import { z } from 'zod';
-import type { CapabilityLinks, InspectTranscriptionJobResult, SubmitTranscriptionJobResult } from '../types';
+import { activeLinksSchema, transcriptionResultSchema } from './transcriptionSchemas';
+import type { CancelTranscriptionJobResult, CapabilityLinks, InspectTranscriptionJobResult, SubmitTranscriptionJobResult } from '../types';
 
 const jobPathPrefix = '/api/transcription-jobs/';
 const uuidV4Pattern = '[0-9a-f]{8}-[0-9a-f]{4}-4[0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}';
@@ -31,12 +32,6 @@ const publicErrorCodes = [
 
 const uuidV4Schema = z.string().regex(new RegExp(`^${uuidV4Pattern}$`));
 const timestampSchema = z.string().datetime({ offset: true });
-const activeLinksSchema = z
-  .object({
-    self: z.string(),
-    cancel: z.string(),
-  })
-  .strict();
 const terminalLinksSchema = z
   .object({
     self: z.string(),
@@ -58,36 +53,6 @@ const processingResponseSchema = z
     started_at: timestampSchema,
     cancellation_requested: z.boolean(),
     links: activeLinksSchema,
-  })
-  .strict();
-const segmentSchema = z
-  .object({
-    start: z.number().finite().nonnegative(),
-    end: z.number().finite().nonnegative(),
-    text: z.string().min(1),
-  })
-  .strict();
-const transcriptionResultSchema = z
-  .object({
-    source: z
-      .object({
-        platform: z.enum(['youtube', 'instagram', 'facebook', 'tiktok', 'x']),
-        video_id: z.string(),
-        url: z.url().refine((value) => new URL(value).protocol === 'https:'),
-        title: z.string(),
-        description: z.string(),
-        channel: z.string(),
-        duration_seconds: z.number().int().positive(),
-      })
-      .strict(),
-    transcript: z
-      .object({
-        method: z.enum(['youtube_captions', 'faster_whisper']),
-        language: z.string().min(1),
-        text: z.string(),
-        segments: z.array(segmentSchema),
-      })
-      .strict(),
   })
   .strict();
 const succeededResponseSchema = z
@@ -141,6 +106,10 @@ const inspectionResponseSchema = z.union([
 type SubmitTranscriptionJobParameters = Readonly<{
   sourceUrl: string;
   signal: AbortSignal;
+}>;
+
+type CancelTranscriptionJobParameters = Readonly<{
+  cancellationUrl: string;
 }>;
 
 type InspectTranscriptionJobParameters = Readonly<{
@@ -223,6 +192,31 @@ export const submitTranscriptionJob = async ({ sourceUrl, signal }: SubmitTransc
 
   const links = parseActiveLinks(parsed.data);
   return links === null ? { kind: 'contract-error' } : { kind: 'accepted', links };
+};
+
+export const cancelTranscriptionJob = async ({
+  cancellationUrl,
+}: CancelTranscriptionJobParameters): Promise<CancelTranscriptionJobResult> => {
+  const cancellationPathMatches = isSameOriginRelativePath(cancellationUrl) && cancellationPathPattern.test(cancellationUrl);
+
+  if (!cancellationPathMatches) {
+    return { kind: 'contract-error' };
+  }
+
+  let response: Response;
+
+  try {
+    response = await fetch(cancellationUrl, {
+      method: 'PUT',
+      cache: 'no-store',
+      credentials: 'omit',
+      redirect: 'error',
+    });
+  } catch {
+    return { kind: 'unavailable' };
+  }
+
+  return response.status === 200 || response.status === 202 ? { kind: 'accepted' } : { kind: 'unavailable' };
 };
 
 export const inspectTranscriptionJob = async ({ statusUrl, signal }: InspectTranscriptionJobParameters): Promise<InspectTranscriptionJobResult> => {
