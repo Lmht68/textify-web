@@ -1,8 +1,21 @@
-import type { TimedSegment } from '../types';
+import type { TimedSegment, TranscriptView } from '../types';
 
-export type ReadingParagraph = Readonly<{
+export type TranscriptParagraph = Readonly<{
   text: string;
-  start: number;
+  start: number | null;
+}>;
+
+export type ReadingParagraph = TranscriptParagraph;
+
+export type TranscriptTextMatch = Readonly<{
+  startOffset: number;
+  endOffset: number;
+  matchIndex: number;
+}>;
+
+export type TranscriptSearchResult = Readonly<{
+  matchesByParagraph: ReadonlyArray<ReadonlyArray<TranscriptTextMatch>>;
+  matchCount: number;
 }>;
 
 type TemporalRun = Readonly<{
@@ -34,6 +47,8 @@ type SentenceDetection = Readonly<{
 const sentenceEndingPattern = /(?:[!?。！？]+|(?<!\.)\.(?!\.))["'’”)\]}]*(?=\s|$)/gu;
 const displayNames =
   typeof Intl.DisplayNames === 'undefined' ? null : new Intl.DisplayNames(['en'], { type: 'language' });
+
+const escapeRegularExpression = (text: string): string => text.replace(/[.*+?^${}()|[\]\\]/gu, '\\$&');
 
 const splitTemporalRuns = (segments: ReadonlyArray<TimedSegment>): ReadonlyArray<TemporalRun> => {
   const runs: Array<TemporalRun> = [];
@@ -211,6 +226,58 @@ export const buildTextOnlyParagraphs = (segments: ReadonlyArray<TimedSegment>): 
 
   return paragraphs;
 };
+
+export const findTranscriptMatches = ({
+  paragraphs,
+  query,
+}: Readonly<{
+  paragraphs: ReadonlyArray<TranscriptParagraph>;
+  query: string;
+}>): TranscriptSearchResult => {
+  const matchesByParagraph = paragraphs.map((): Array<TranscriptTextMatch> => []);
+
+  if (query.length === 0) {
+    return { matchesByParagraph, matchCount: 0 };
+  }
+
+  const pattern = new RegExp(escapeRegularExpression(query), 'giu');
+  let matchIndex = 0;
+
+  for (const [paragraphIndex, paragraph] of paragraphs.entries()) {
+    const paragraphMatches = matchesByParagraph[paragraphIndex];
+    pattern.lastIndex = 0;
+    let match = pattern.exec(paragraph.text);
+
+    while (match !== null) {
+      paragraphMatches.push({
+        startOffset: match.index,
+        endOffset: match.index + match[0].length,
+        matchIndex,
+      });
+      matchIndex += 1;
+      match = pattern.exec(paragraph.text);
+    }
+  }
+
+  return { matchesByParagraph, matchCount: matchIndex };
+};
+
+export const serializeTranscriptView = ({
+  paragraphs,
+  transcriptView,
+}: Readonly<{
+  paragraphs: ReadonlyArray<TranscriptParagraph>;
+  transcriptView: TranscriptView;
+}>): string =>
+  paragraphs
+    .map((paragraph) => {
+      if (transcriptView === 'text-only' || paragraph.start === null) {
+        return paragraph.text;
+      }
+
+      return `[${formatClockTime(paragraph.start)}] ${paragraph.text}`;
+    })
+    .join('\n\n');
 
 export const formatClockTime = (seconds: number): string => {
   const wholeSeconds = Math.max(0, Math.floor(seconds));
