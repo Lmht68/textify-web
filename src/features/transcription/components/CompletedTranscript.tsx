@@ -159,7 +159,7 @@ export const CompletedTranscript = ({
       <section className="transcript-source-card" aria-label="Source details">
         <dl className="source-details">
           <div className="source-detail source-detail-link">
-            <dt>Video</dt>
+            <dt>Source</dt>
             <dd>
               <a href={result.source.url} target="_blank" rel="noopener noreferrer" className="source-link">
                 {sourceLabel}
@@ -206,10 +206,20 @@ export const CompletedTranscript = ({
               </label>
             </div>
             <div className="transcript-actions">
-              <button type="button" disabled={!hasSearchableContent} onClick={handleCopy}>
+              <button
+                type="button"
+                className="transcript-copy-action"
+                disabled={!hasSearchableContent}
+                onClick={handleCopy}
+              >
                 Copy
               </button>
-              <button type="button" disabled={!hasSearchableContent} onClick={handleExport}>
+              <button
+                type="button"
+                className="transcript-export-action"
+                disabled={!hasSearchableContent}
+                onClick={handleExport}
+              >
                 Export
               </button>
             </div>
@@ -264,11 +274,11 @@ export const CompletedTranscript = ({
                 </button>
               ) : null}
             </div>
-            <p className="transcript-search-count">
+            <output className="transcript-search-count">
               {activeMatchIndex === null
                 ? 'No matches'
                 : `${activeMatchIndex + 1} of ${searchResult.matchCount}`}
-            </p>
+            </output>
             <div className="transcript-search-navigation" aria-label="Search matches">
               <button
                 type="button"

@@ -16,7 +16,7 @@ export const LandingPage = () => {
             <h1 id="landing-heading" className="hero-title">
               Paste a link, get a transcript
             </h1>
-            <p className="hero-description">Turn any public video into a searchable transcript with timestamps, split into easy-to-read paragraphs.</p>
+            <p className="hero-description">Turn any public video into a searchable transcript with timestamps</p>
             <TranscriptionFlow />
           </div>
         </section>

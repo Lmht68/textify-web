@@ -10,7 +10,7 @@ export const ActiveTranscription = ({ submittedUrl, statusMessage, onCancel }: A
       <p className="submitted-url">{submittedUrl}</p>
       <div className="active-transcription-copy">
         <p className="active-transcription-status">{statusMessage}</p>
-        <p className="active-transcription-note">We'll check again in 2 seconds. You can leave this tab open.</p>
+        <p className="active-transcription-note">This might take a moment. You can leave this tab open while we work.</p>
       </div>
       {onCancel === null ? null : (
         <button className="transcription-cancel" type="button" onClick={onCancel}>

@@ -606,21 +606,33 @@ button:disabled {
 
 .transcript-actions button {
   padding: 0 1rem;
-  color: var(--surface);
-  background: var(--accent);
-  border: 1px solid var(--accent);
+  border: 1px solid;
 }
 
-.transcript-search-navigation button {
+.transcript-copy-action {
   color: var(--text);
   background: var(--surface);
-  border: 1px solid var(--border);
+  border-color: var(--border);
 }
 
-.transcript-actions button:hover:not(:disabled) {
+.transcript-export-action {
   color: var(--surface);
-  border-color: var(--accent-hover);
-  background: var(--accent-hover);
+  background: var(--text);
+  border-color: var(--text);
+}
+
+.transcript-copy-action:hover:not(:disabled),
+.transcript-copy-action:focus-visible {
+  color: var(--accent);
+  border-color: var(--accent);
+  background: color-mix(in srgb, var(--accent) 8%, var(--surface));
+}
+
+.transcript-export-action:hover:not(:disabled),
+.transcript-export-action:focus-visible {
+  color: var(--surface);
+  border-color: color-mix(in srgb, var(--text) 88%, #000);
+  background: color-mix(in srgb, var(--text) 88%, #000);
 }
 
 .transcript-search-navigation button:hover:not(:disabled) {
@@ -1034,7 +1046,7 @@ button:disabled {
 
   .transcript-actions {
     display: grid;
-    grid-template-columns: minmax(0, 1fr);
+    grid-template-columns: repeat(2, minmax(0, 1fr));
   }
 
   .transcript-actions button {
