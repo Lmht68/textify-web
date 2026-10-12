@@ -75,6 +75,22 @@ export const succeededJob = {
   },
 } as const;
 
+export const failedJob = {
+  id: fakeCapabilityId,
+  status: 'finished',
+  outcome: 'failed',
+  submitted_at: '2026-01-01T00:00:00Z',
+  started_at: '2026-01-01T00:00:01Z',
+  finished_at: '2026-01-01T00:00:02Z',
+  error: {
+    code: 'unsupported_content',
+    message: 'Provider capability error: job queue unavailable at API status code 503.',
+  },
+  links: {
+    self: transcriptionStatusUrl,
+  },
+} as const;
+
 export const replacementCapabilityId = '11111111-1111-4111-8111-111111111111';
 export const replacementSourceUrl = 'https://www.youtube.com/watch?v=ZyXwVu98765';
 export const replacementTranscriptionStatusUrl = `/api/transcription-jobs/${replacementCapabilityId}`;

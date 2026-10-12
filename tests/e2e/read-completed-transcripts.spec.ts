@@ -71,19 +71,19 @@ test('should present source details and Reading paragraphs when a Current transc
   await expect(completedTranscript).toContainText('English');
   await expect(transcriptView.getByRole('radio', { name: 'Text only' })).toBeChecked();
   await expect(reading.locator('time')).toHaveCount(0);
-  await expect(reading.locator('p')).toHaveText(textOnlyParagraphs);
+  await expect(reading.locator('.reading-paragraph')).toHaveText(textOnlyParagraphs);
 
   await transcriptView.getByRole('radio', { name: 'With timestamps' }).check();
 
   await expect(transcriptView.getByRole('radio', { name: 'With timestamps' })).toBeChecked();
-  await expect(reading.locator('p')).toHaveText(timestampedReadingParagraphs);
+  await expect(reading.locator('.reading-paragraph')).toHaveText(timestampedReadingParagraphs);
   await expect(reading.locator('time')).toHaveText(['00:00', '00:02', '00:08', '00:12', '1:01:01']);
 
   await page.reload();
 
   await expect(completedTranscript.getByRole('link', { name: 'How small teams ship faster' })).toBeVisible();
   await expect(transcriptView.getByRole('radio', { name: 'With timestamps' })).toBeChecked();
-  await expect(reading.locator('p')).toHaveText(timestampedReadingParagraphs);
+  await expect(reading.locator('.reading-paragraph')).toHaveText(timestampedReadingParagraphs);
   expect(statusRequestCount).toBe(1);
   expect(await page.evaluate(() => document.documentElement.scrollWidth <= document.documentElement.clientWidth)).toBe(true);
 });

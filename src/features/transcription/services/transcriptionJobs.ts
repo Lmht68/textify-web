@@ -223,7 +223,7 @@ export const inspectTranscriptionJob = async ({ statusUrl, signal }: InspectTran
   const statusPathMatches = isSameOriginRelativePath(statusUrl) && selfPathPattern.test(statusUrl);
 
   if (!statusPathMatches) {
-    return { kind: 'contract-error' };
+    return { kind: 'invalid-capability' };
   }
 
   let response: Response;
@@ -241,6 +241,10 @@ export const inspectTranscriptionJob = async ({ statusUrl, signal }: InspectTran
     }
 
     return { kind: 'unavailable' };
+  }
+
+  if (response.status === 404) {
+    return { kind: 'not-found' };
   }
 
   if (response.status !== 200) {

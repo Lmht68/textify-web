@@ -52,5 +52,7 @@ export type InspectTranscriptionJobResult =
   | Readonly<{ kind: 'failed' }>
   | Readonly<{ kind: 'cancelled' }>
   | Readonly<{ kind: 'aborted' }>
+  | Readonly<{ kind: 'not-found' }>
+  | Readonly<{ kind: 'invalid-capability' }>
   | Readonly<{ kind: 'unavailable' }>
   | Readonly<{ kind: 'contract-error' }>;

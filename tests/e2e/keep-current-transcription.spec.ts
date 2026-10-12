@@ -52,6 +52,7 @@ test('should restore active Current transcription after reload and continue poll
   await expect(activeTranscription).toContainText(sourceUrl);
   await expect(activeTranscription).toContainText('Getting your transcript ready');
   expect(statusRequestCount).toBe(0);
+  await page.waitForTimeout(10);
 
   await page.clock.fastForward(2_000);
   await expect(activeTranscription).toContainText('Turning your video into text');
@@ -93,6 +94,7 @@ test('should restore a completed Current transcription after reopening without a
   await page.getByLabel('Video link').fill(sourceUrl);
   await page.getByRole('button', { name: 'Transcribe' }).click();
   await expect(page.getByRole('article', { name: 'Transcription status' })).toBeVisible();
+  await page.waitForTimeout(10);
   await page.clock.fastForward(2_000);
   await expect(page.getByText('Retention result.', { exact: true })).toBeVisible();
   expect(statusRequestCount).toBe(1);
@@ -309,6 +311,7 @@ test('should clear unavailable restored work and explain how to start over', asy
 
   await page.reload();
   await expect(page.getByRole('article', { name: 'Transcription status' })).toBeVisible();
+  await page.waitForTimeout(10);
 
   await page.clock.fastForward(2_000);
 

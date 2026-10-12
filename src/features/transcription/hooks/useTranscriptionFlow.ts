@@ -16,12 +16,20 @@ export type TranscriptionFlowState =
   | Readonly<{ status: 'queued'; operationId: string; submittedUrl: string; links: CapabilityLinks; restored: boolean }>
   | Readonly<{ status: 'processing'; operationId: string; submittedUrl: string; links: CapabilityLinks; restored: boolean }>
   | Readonly<{
+      status: 'temporary-interruption';
+      operationId: string;
+      submittedUrl: string;
+      links: CapabilityLinks;
+      restored: boolean;
+    }>
+  | Readonly<{
       status: 'succeeded';
       operationId: string;
       submittedUrl: string;
       result: TranscriptionResult;
       transcriptView: TranscriptView;
     }>
+  | Readonly<{ status: 'terminal-failure'; submittedUrl: string }>
   | Readonly<{ status: 'error'; submittedUrl: string; message: string }>;
 
 export type UseTranscriptionFlowResult = Readonly<{
@@ -32,13 +40,13 @@ export type UseTranscriptionFlowResult = Readonly<{
   noticeMessage: string | null;
   submit: () => Promise<void>;
   cancel: () => void;
+  retryStatus: () => void;
+  editSubmittedUrl: () => void;
   selectTranscriptView: (transcriptView: TranscriptView) => void;
 }>;
 
-const submissionErrorMessage = "Textify couldn't start this transcript. Check the link and try again.";
+const initialOutageMessage = "Textify couldn't start this transcript. Try again in a moment.";
 const unavailableRestoredMessage = 'That transcription is no longer available. Paste the link again to start over.';
-const statusErrorMessage = "Textify couldn't check for updates. Submit the link again.";
-const failedErrorMessage = "Textify couldn't turn this link into text. Check the link and try again.";
 const cancelledErrorMessage = 'This transcription was cancelled. Submit the link again when you\'re ready.';
 const pollingIntervalMilliseconds = 2_000;
 
@@ -83,6 +91,10 @@ export const useTranscriptionFlow = (): UseTranscriptionFlowResult => {
   const submissionControllerRef = useRef<AbortController | null>(null);
   const operationIdRef = useRef(operationIdFromStoredCurrentTranscription(initialSnapshot));
   const persistedOperationIdRef = useRef(operationIdFromStoredCurrentTranscription(initialSnapshot));
+  const [immediateRetryVersion, setImmediateRetryVersion] = useState(0);
+  const stateRef = useRef(state);
+  const consumedImmediateRetryVersionRef = useRef(0);
+  stateRef.current = state;
 
   const applyStoredCurrentTranscription = useCallback((snapshot: StoredCurrentTranscription | null) => {
     operationIdRef.current = operationIdFromStoredCurrentTranscription(snapshot);
@@ -133,83 +145,143 @@ export const useTranscriptionFlow = (): UseTranscriptionFlowResult => {
   }, [applyStoredCurrentTranscription]);
 
   useEffect(() => {
-    if (state.status !== 'queued' && state.status !== 'processing') {
+    const interruptWhenOffline = () => {
+      const currentState = stateRef.current;
+
+      if (currentState.status !== 'queued' && currentState.status !== 'processing') {
+        return;
+      }
+
+      const interruptedState: TranscriptionFlowState = {
+        status: 'temporary-interruption',
+        operationId: currentState.operationId,
+        submittedUrl: currentState.submittedUrl,
+        links: currentState.links,
+        restored: currentState.restored,
+      };
+      stateRef.current = interruptedState;
+      setState(interruptedState);
+    };
+
+    const retryWhenOnline = () => {
+      if (stateRef.current.status === 'temporary-interruption') {
+        setImmediateRetryVersion((version) => version + 1);
+      }
+    };
+
+    window.addEventListener('offline', interruptWhenOffline);
+    window.addEventListener('online', retryWhenOnline);
+    return () => {
+      window.removeEventListener('offline', interruptWhenOffline);
+      window.removeEventListener('online', retryWhenOnline);
+    };
+  }, []);
+
+  useEffect(() => {
+    if (state.status !== 'queued' && state.status !== 'processing' && state.status !== 'temporary-interruption') {
       return;
+    }
+
+    if ((state.status === 'queued' || state.status === 'processing') && !navigator.onLine) {
+      const interruptedState: TranscriptionFlowState = {
+        status: 'temporary-interruption',
+        operationId: state.operationId,
+        submittedUrl: state.submittedUrl,
+        links: state.links,
+        restored: state.restored,
+      };
+      stateRef.current = interruptedState;
+      setState(interruptedState);
+      return;
+    }
+
+    const shouldRetryImmediately = immediateRetryVersion !== consumedImmediateRetryVersionRef.current;
+
+    if (shouldRetryImmediately) {
+      consumedImmediateRetryVersionRef.current = immediateRetryVersion;
     }
 
     let isCurrent = true;
     const controller = new AbortController();
-    const timer = window.setTimeout(() => {
-      void (async () => {
-        const inspection = await inspectTranscriptionJob({ statusUrl: state.links.self, signal: controller.signal });
+    const timer = window.setTimeout(
+      () => {
+        void (async () => {
+          const inspection = await inspectTranscriptionJob({ statusUrl: state.links.self, signal: controller.signal });
 
-        if (!isCurrent || inspection.kind === 'aborted' || operationIdRef.current !== state.operationId) {
-          return;
-        }
-
-        switch (inspection.kind) {
-          case 'queued':
-          case 'processing': {
-            const activeSnapshot: StoredCurrentTranscription = {
-              version: 1,
-              kind: 'active',
-              operationId: state.operationId,
-              status: inspection.kind,
-              submittedUrl: state.submittedUrl,
-              links: inspection.links,
-            };
-
-            if (persistCurrentSnapshot(state.operationId, activeSnapshot)) {
-              return;
-            }
-
-            setState({
-              status: inspection.kind,
-              operationId: state.operationId,
-              submittedUrl: state.submittedUrl,
-              links: inspection.links,
-              restored: false,
-            });
+          if (!isCurrent || inspection.kind === 'aborted' || operationIdRef.current !== state.operationId) {
             return;
           }
-          case 'succeeded': {
-            const completedSnapshot: StoredCurrentTranscription = {
-              version: 1,
-              kind: 'completed',
-              operationId: state.operationId,
-              submittedUrl: state.submittedUrl,
-              result: inspection.result,
-              transcriptView: 'text-only',
-            };
 
-            if (persistCurrentSnapshot(state.operationId, completedSnapshot)) {
+          switch (inspection.kind) {
+            case 'queued':
+            case 'processing': {
+              const activeSnapshot: StoredCurrentTranscription = {
+                version: 1,
+                kind: 'active',
+                operationId: state.operationId,
+                status: inspection.kind,
+                submittedUrl: state.submittedUrl,
+                links: inspection.links,
+              };
+
+              if (persistCurrentSnapshot(state.operationId, activeSnapshot)) {
+                return;
+              }
+
+              setState({
+                status: inspection.kind,
+                operationId: state.operationId,
+                submittedUrl: state.submittedUrl,
+                links: inspection.links,
+                restored: false,
+              });
               return;
             }
+            case 'succeeded': {
+              const completedSnapshot: StoredCurrentTranscription = {
+                version: 1,
+                kind: 'completed',
+                operationId: state.operationId,
+                submittedUrl: state.submittedUrl,
+                result: inspection.result,
+                transcriptView: 'text-only',
+              };
 
-            setState({
-              status: 'succeeded',
-              operationId: state.operationId,
-              submittedUrl: state.submittedUrl,
-              result: inspection.result,
-              transcriptView: 'text-only',
-            });
-            return;
-          }
-          case 'failed':
-          case 'cancelled': {
-            const errorMessage = inspection.kind === 'failed' ? failedErrorMessage : cancelledErrorMessage;
-            const clearedSnapshot: StoredCurrentTranscription = { version: 1, kind: 'cleared', operationId: state.operationId };
+              if (persistCurrentSnapshot(state.operationId, completedSnapshot)) {
+                return;
+              }
 
-            if (persistCurrentSnapshot(state.operationId, clearedSnapshot)) {
+              setState({
+                status: 'succeeded',
+                operationId: state.operationId,
+                submittedUrl: state.submittedUrl,
+                result: inspection.result,
+                transcriptView: 'text-only',
+              });
               return;
             }
+            case 'failed': {
+              const clearedSnapshot: StoredCurrentTranscription = { version: 1, kind: 'cleared', operationId: state.operationId };
 
-            setState({ status: 'error', submittedUrl: state.submittedUrl, message: errorMessage });
-            return;
-          }
-          case 'unavailable':
-          case 'contract-error': {
-            if (state.restored) {
+              if (persistCurrentSnapshot(state.operationId, clearedSnapshot)) {
+                return;
+              }
+
+              setState({ status: 'terminal-failure', submittedUrl: state.submittedUrl });
+              return;
+            }
+            case 'cancelled': {
+              const clearedSnapshot: StoredCurrentTranscription = { version: 1, kind: 'cleared', operationId: state.operationId };
+
+              if (persistCurrentSnapshot(state.operationId, clearedSnapshot)) {
+                return;
+              }
+
+              setState({ status: 'error', submittedUrl: state.submittedUrl, message: cancelledErrorMessage });
+              return;
+            }
+            case 'not-found':
+            case 'invalid-capability': {
               const clearedSnapshot: StoredCurrentTranscription = { version: 1, kind: 'cleared', operationId: state.operationId };
 
               if (persistCurrentSnapshot(state.operationId, clearedSnapshot)) {
@@ -222,20 +294,28 @@ export const useTranscriptionFlow = (): UseTranscriptionFlowResult => {
               setState({ status: 'idle' });
               return;
             }
-
-            setState({ status: 'error', submittedUrl: state.submittedUrl, message: statusErrorMessage });
-            return;
+            case 'unavailable':
+            case 'contract-error':
+              setState({
+                status: 'temporary-interruption',
+                operationId: state.operationId,
+                submittedUrl: state.submittedUrl,
+                links: state.links,
+                restored: state.restored,
+              });
+              return;
           }
-        }
-      })();
-    }, pollingIntervalMilliseconds);
+        })();
+      },
+      shouldRetryImmediately ? 0 : pollingIntervalMilliseconds,
+    );
 
     return () => {
       isCurrent = false;
       window.clearTimeout(timer);
       controller.abort();
     };
-  }, [persistCurrentSnapshot, state]);
+  }, [immediateRetryVersion, persistCurrentSnapshot, state]);
 
   const setInputValue = useCallback((value: string) => {
     setInputValueState(value);
@@ -281,7 +361,7 @@ export const useTranscriptionFlow = (): UseTranscriptionFlowResult => {
   );
 
   const cancel = useCallback(() => {
-    if (state.status !== 'queued' && state.status !== 'processing') {
+    if (state.status !== 'queued' && state.status !== 'processing' && state.status !== 'temporary-interruption') {
       return;
     }
 
@@ -295,6 +375,20 @@ export const useTranscriptionFlow = (): UseTranscriptionFlowResult => {
     setState({ status: 'idle' });
     setNoticeMessage(null);
     void cancelTranscriptionJob({ cancellationUrl });
+  }, [state]);
+
+  const retryStatus = useCallback(() => {
+    if (state.status === 'temporary-interruption') {
+      setImmediateRetryVersion((version) => version + 1);
+    }
+  }, [state.status]);
+
+  const editSubmittedUrl = useCallback(() => {
+    if (state.status !== 'terminal-failure') {
+      return;
+    }
+
+    setState({ status: 'idle' });
   }, [state]);
 
   const submit = useCallback(async () => {
@@ -317,7 +411,10 @@ export const useTranscriptionFlow = (): UseTranscriptionFlowResult => {
       return;
     }
 
-    const priorCancellationUrl = state.status === 'queued' || state.status === 'processing' ? state.links.cancel : null;
+    const priorCancellationUrl =
+      state.status === 'queued' || state.status === 'processing' || state.status === 'temporary-interruption'
+        ? state.links.cancel
+        : null;
     const operationId = crypto.randomUUID();
     submissionControllerRef.current?.abort();
     const controller = new AbortController();
@@ -372,21 +469,40 @@ export const useTranscriptionFlow = (): UseTranscriptionFlowResult => {
         });
         return;
       }
-      case 'backend-rejected':
-      case 'unavailable':
-      case 'contract-error': {
-        const errorMessage = submission.kind === 'backend-rejected' ? submissionErrorMessage : statusErrorMessage;
+      case 'backend-rejected': {
         const clearedSnapshot: StoredCurrentTranscription = { version: 1, kind: 'cleared', operationId };
 
         if (persistCurrentSnapshot(operationId, clearedSnapshot)) {
           return;
         }
 
-        setState({ status: 'error', submittedUrl: trimmedInput, message: errorMessage });
+        setState({ status: 'terminal-failure', submittedUrl: trimmedInput });
+        return;
+      }
+      case 'unavailable':
+      case 'contract-error': {
+        const clearedSnapshot: StoredCurrentTranscription = { version: 1, kind: 'cleared', operationId };
+
+        if (persistCurrentSnapshot(operationId, clearedSnapshot)) {
+          return;
+        }
+
+        setState({ status: 'error', submittedUrl: trimmedInput, message: initialOutageMessage });
         return;
       }
     }
   }, [inputValue, persistCurrentSnapshot, state]);
 
-  return { inputValue, state, validationMessage, noticeMessage, setInputValue, submit, cancel, selectTranscriptView };
+  return {
+    inputValue,
+    state,
+    validationMessage,
+    noticeMessage,
+    setInputValue,
+    submit,
+    cancel,
+    retryStatus,
+    editSubmittedUrl,
+    selectTranscriptView,
+  };
 };

@@ -7,6 +7,7 @@ type TranscriptionFormProps = Readonly<{
   inputValue: string;
   isSubmitting: boolean;
   validationMessage: string | null;
+  focusInputRequest: number;
   onInputValueChange: (value: string) => void;
   onSubmit: () => Promise<void>;
 }>;
@@ -63,7 +64,14 @@ const PlatformIcon = ({ platform }: { readonly platform: SupportedPlatform }) =>
   );
 };
 
-export const TranscriptionForm = ({ inputValue, isSubmitting, validationMessage, onInputValueChange, onSubmit }: TranscriptionFormProps) => {
+export const TranscriptionForm = ({
+  inputValue,
+  isSubmitting,
+  validationMessage,
+  focusInputRequest,
+  onInputValueChange,
+  onSubmit,
+}: TranscriptionFormProps) => {
   const inputRef = useRef<HTMLInputElement>(null);
 
   useEffect(() => {
@@ -71,6 +79,12 @@ export const TranscriptionForm = ({ inputValue, isSubmitting, validationMessage,
       inputRef.current?.focus();
     }
   }, [validationMessage]);
+
+  useEffect(() => {
+    if (focusInputRequest > 0) {
+      inputRef.current?.focus();
+    }
+  }, [focusInputRequest]);
 
   const handleSubmit = (event: FormEvent<HTMLFormElement>) => {
     event.preventDefault();

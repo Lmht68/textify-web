@@ -1,13 +1,31 @@
+import { useState } from 'react';
 import { ActiveTranscription } from './components/ActiveTranscription';
 import { CompletedTranscript } from './components/CompletedTranscript';
 import { TranscriptionForm } from './components/TranscriptionForm';
+import { RecoveryPanel } from './components/RecoveryPanel';
 import { useTranscriptionFlow } from './hooks/useTranscriptionFlow';
 
 export const TranscriptionFlow = () => {
-  const { inputValue, state, validationMessage, noticeMessage, setInputValue, submit, cancel, selectTranscriptView } =
-    useTranscriptionFlow();
+  const {
+    inputValue,
+    state,
+    validationMessage,
+    noticeMessage,
+    setInputValue,
+    submit,
+    cancel,
+    retryStatus,
+    editSubmittedUrl,
+    selectTranscriptView,
+  } = useTranscriptionFlow();
+  const [focusInputRequest, setFocusInputRequest] = useState(0);
   const isSubmitting = state.status === 'submitting';
   const activeState = isSubmitting || state.status === 'queued' || state.status === 'processing' ? state : null;
+
+  const handleEditSubmittedUrl = () => {
+    editSubmittedUrl();
+    setFocusInputRequest((currentRequest) => currentRequest + 1);
+  };
   let lifecycleMessage = '';
 
   switch (state.status) {
@@ -24,6 +42,8 @@ export const TranscriptionFlow = () => {
       lifecycleMessage = 'Your transcript is ready.';
       break;
     case 'idle':
+    case 'terminal-failure':
+    case 'temporary-interruption':
     case 'error':
       break;
   }
@@ -34,6 +54,7 @@ export const TranscriptionFlow = () => {
         inputValue={inputValue}
         isSubmitting={isSubmitting}
         validationMessage={validationMessage}
+        focusInputRequest={focusInputRequest}
         onInputValueChange={setInputValue}
         onSubmit={submit}
       />
@@ -56,6 +77,12 @@ export const TranscriptionFlow = () => {
         <article className="transcription-error" role="alert">
           <p>{state.message}</p>
         </article>
+      ) : null}
+      {state.status === 'terminal-failure' ? (
+        <RecoveryPanel kind="terminal" onRetry={submit} onEdit={handleEditSubmittedUrl} />
+      ) : null}
+      {state.status === 'temporary-interruption' ? (
+        <RecoveryPanel kind="temporary" submittedUrl={state.submittedUrl} onRetry={retryStatus} onCancel={cancel} />
       ) : null}
       {state.status === 'succeeded' ? (
         <CompletedTranscript
