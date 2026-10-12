@@ -98,6 +98,7 @@ vite.config.ts.timestamp-*
 
 # Documentation
 docs/*
+__screenshots__/
 
 # Agents
 AGENTS.md
