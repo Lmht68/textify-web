@@ -105,6 +105,101 @@ test('should highlight each case-insensitive literal match when a search query i
   );
 });
 
+test('should only scroll to matches after manual search navigation', async ({ page }) => {
+  await page.emulateMedia({ reducedMotion: 'reduce' });
+
+  const completedTranscript = await openCompletedTranscript(page);
+  const search = completedTranscript.getByLabel('Search transcript');
+  const previousMatch = completedTranscript.getByRole('button', { name: 'Previous match' });
+  const nextMatch = completedTranscript.getByRole('button', { name: 'Next match' });
+  const activeMatch = completedTranscript.locator('mark[aria-current="true"]');
+
+  await search.evaluate((element) => {
+    element.scrollIntoView({ block: 'end', inline: 'nearest' });
+  });
+  const scrollYBeforeQuery = await page.evaluate(() => window.scrollY);
+
+  await search.fill('Final unfinished utterance');
+
+  await expect(activeMatch).toHaveText('Final unfinished utterance');
+  await expect(completedTranscript.getByText('1 of 1', { exact: true })).toBeVisible();
+  expect(await page.evaluate(() => window.scrollY)).toBe(scrollYBeforeQuery);
+
+  await expect(previousMatch).toBeEnabled();
+  await expect(nextMatch).toBeEnabled();
+
+  await nextMatch.evaluate((element) => {
+    element.scrollIntoView({ block: 'end', inline: 'nearest' });
+  });
+  const scrollYBeforeSingleNextMatch = await page.evaluate(() => window.scrollY);
+
+  await nextMatch.click();
+
+  await expect(activeMatch).toBeInViewport();
+  expect(await page.evaluate(() => window.scrollY)).toBeGreaterThan(scrollYBeforeSingleNextMatch);
+
+  await previousMatch.evaluate((element) => {
+    element.scrollIntoView({ block: 'end', inline: 'nearest' });
+  });
+  const scrollYBeforeSinglePreviousMatch = await page.evaluate(() => window.scrollY);
+
+  await previousMatch.click();
+
+  await expect(activeMatch).toBeInViewport();
+  expect(await page.evaluate(() => window.scrollY)).toBeGreaterThan(scrollYBeforeSinglePreviousMatch);
+
+  await search.fill('SENTENCE.');
+  await expect(completedTranscript.getByText('1 of 7', { exact: true })).toBeVisible();
+
+  await nextMatch.evaluate((element) => {
+    element.scrollIntoView({ block: 'end', inline: 'nearest' });
+  });
+  const scrollYBeforeNextMatch = await page.evaluate(() => window.scrollY);
+
+  await nextMatch.click();
+
+  await expect(completedTranscript.getByText('2 of 7', { exact: true })).toBeVisible();
+  await expect(activeMatch).toBeInViewport();
+  expect(await page.evaluate(() => window.scrollY)).toBeGreaterThan(scrollYBeforeNextMatch);
+
+  await previousMatch.evaluate((element) => {
+    element.scrollIntoView({ block: 'end', inline: 'nearest' });
+  });
+  const scrollYBeforePreviousMatch = await page.evaluate(() => window.scrollY);
+
+  await previousMatch.click();
+
+  await expect(completedTranscript.getByText('1 of 7', { exact: true })).toBeVisible();
+  await expect(activeMatch).toBeInViewport();
+  expect(await page.evaluate(() => window.scrollY)).toBeGreaterThan(scrollYBeforePreviousMatch);
+});
+
+test('should leave space beneath the selected match when manual navigation scrolls', async ({ page }) => {
+  await page.emulateMedia({ reducedMotion: 'reduce' });
+
+  const completedTranscript = await openCompletedTranscript(page);
+  const search = completedTranscript.getByLabel('Search transcript');
+  const nextMatch = completedTranscript.getByRole('button', { name: 'Next match' });
+  const activeMatch = completedTranscript.locator('mark[aria-current="true"]');
+
+  await search.fill('SENTENCE.');
+
+  const secondMatchPageTop = await completedTranscript
+    .locator('mark')
+    .nth(1)
+    .evaluate((element) => element.getBoundingClientRect().top + window.scrollY);
+  await page.evaluate((pageTop) => {
+    window.scrollTo({ top: pageTop - window.innerHeight + 1 });
+  }, secondMatchPageTop);
+
+  await nextMatch.dispatchEvent('click');
+
+  await expect(completedTranscript.getByText('2 of 7', { exact: true })).toBeVisible();
+  expect(
+    await activeMatch.evaluate((element) => window.innerHeight - element.getBoundingClientRect().bottom),
+  ).toBeGreaterThanOrEqual(32);
+});
+
 test('should copy the selected Transcript view when Copy is clicked', async ({ page, context }) => {
   await context.grantPermissions(['clipboard-read', 'clipboard-write']);
   const completedTranscript = await openCompletedTranscript(page);

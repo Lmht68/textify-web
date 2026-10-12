@@ -757,6 +757,7 @@ button:disabled {
 }
 
 .reading-paragraph mark[aria-current="true"] {
+  scroll-margin-block: 16rem;
   box-shadow: inset 0 0 0 2px #8b6400;
 }
 

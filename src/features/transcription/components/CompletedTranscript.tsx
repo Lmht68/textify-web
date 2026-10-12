@@ -22,6 +22,10 @@ type TranscriptNotification = Readonly<{
   message: string;
 }>;
 
+const scrollToActiveMatch = (match: HTMLElement | null) => {
+  match?.scrollIntoView({ block: 'nearest', inline: 'nearest' });
+};
+
 export const CompletedTranscript = ({
   result,
   transcriptView,
@@ -45,6 +49,7 @@ export const CompletedTranscript = ({
   const [selectedMatchIndex, setSelectedMatchIndex] = useState(0);
   const [notification, setNotification] = useState<TranscriptNotification | null>(null);
   const activeMatchRef = useRef<HTMLElement | null>(null);
+  const shouldScrollToActiveMatchRef = useRef(false);
   const nextNotificationId = useRef(0);
   const searchResult = useMemo(
     () => findTranscriptMatches({ paragraphs, query }),
@@ -69,10 +74,13 @@ export const CompletedTranscript = ({
   }, [isTimestamped, query]);
 
   useEffect(() => {
-    if (activeMatchIndex !== null) {
-      activeMatchRef.current?.scrollIntoView({ block: 'nearest', inline: 'nearest' });
+    if (!shouldScrollToActiveMatchRef.current) {
+      return;
     }
-  }, [activeMatchIndex, isTimestamped, paragraphs, query]);
+
+    shouldScrollToActiveMatchRef.current = false;
+    scrollToActiveMatch(activeMatchRef.current);
+  }, [activeMatchIndex]);
 
   useEffect(() => {
     if (notificationIdentifier === undefined) {
@@ -120,6 +128,28 @@ export const CompletedTranscript = ({
   const handleTranscriptViewChange = (nextTranscriptView: TranscriptView) => {
     setSelectedMatchIndex(0);
     onTranscriptViewChange(nextTranscriptView);
+  };
+
+  const handlePreviousMatch = () => {
+    if (searchResult.matchCount === 1) {
+      scrollToActiveMatch(activeMatchRef.current);
+      return;
+    }
+
+    shouldScrollToActiveMatchRef.current = true;
+    setSelectedMatchIndex((currentMatchIndex) => Math.max(0, currentMatchIndex - 1));
+  };
+
+  const handleNextMatch = () => {
+    if (searchResult.matchCount === 1) {
+      scrollToActiveMatch(activeMatchRef.current);
+      return;
+    }
+
+    shouldScrollToActiveMatchRef.current = true;
+    setSelectedMatchIndex((currentMatchIndex) =>
+      Math.min(searchResult.matchCount - 1, currentMatchIndex + 1),
+    );
   };
 
   const showNotification = (message: string) => {
@@ -282,10 +312,8 @@ export const CompletedTranscript = ({
             <div className="transcript-search-navigation" aria-label="Search matches">
               <button
                 type="button"
-                disabled={activeMatchIndex === null || activeMatchIndex === 0}
-                onClick={() => {
-                  setSelectedMatchIndex((currentMatchIndex) => Math.max(0, currentMatchIndex - 1));
-                }}
+                disabled={activeMatchIndex === null || (searchResult.matchCount > 1 && activeMatchIndex === 0)}
+                onClick={handlePreviousMatch}
               >
                 <svg
                   aria-hidden="true"
@@ -302,13 +330,10 @@ export const CompletedTranscript = ({
               <button
                 type="button"
                 disabled={
-                  activeMatchIndex === null || activeMatchIndex === searchResult.matchCount - 1
+                  activeMatchIndex === null ||
+                  (searchResult.matchCount > 1 && activeMatchIndex === searchResult.matchCount - 1)
                 }
-                onClick={() => {
-                  setSelectedMatchIndex((currentMatchIndex) =>
-                    Math.min(searchResult.matchCount - 1, currentMatchIndex + 1),
-                  );
-                }}
+                onClick={handleNextMatch}
               >
                 <svg
                   aria-hidden="true"
