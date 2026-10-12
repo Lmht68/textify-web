@@ -1,0 +1,12 @@
+services:
+  frontend:
+    build:
+      context: .
+    image: textify-frontend:local
+    environment:
+      TEXTIFY_API_UPSTREAM: ${TEXTIFY_API_UPSTREAM:?TEXTIFY_API_UPSTREAM must be set}
+    ports:
+      - "127.0.0.1:${TEXTIFY_FRONTEND_HOST_PORT:-4173}:80"
+    extra_hosts:
+      - "host.docker.internal:host-gateway"
+    restart: unless-stopped

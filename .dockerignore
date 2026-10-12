@@ -1,0 +1,39 @@
+# Dependencies and generated output
+node_modules/
+dist/
+*.tsbuildinfo
+.vite/
+
+# Test and report artifacts
+tests/
+test-results/
+playwright-report/
+coverage/
+.nyc_output/
+*.lcov
+
+# Version control and local environments
+.git/
+.gitignore
+.env
+.env.*
+!.env.example
+*.local
+
+# Agent and design-review artifacts
+.impeccable/
+.scratch/
+AGENTS.md
+CONTEXT.md
+PRODUCT.md
+DESIGN.md
+GLOSSARY.md
+
+# Documentation artifacts
+docs/
+README.md
+
+# Editor and operating-system files
+.vscode/
+.idea/
+.DS_Store

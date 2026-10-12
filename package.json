@@ -14,7 +14,8 @@
     "typecheck": "tsc -b",
     "lint": "eslint .",
     "test:e2e": "playwright test",
-    "test": "npm run test:e2e"
+    "test:standalone": "playwright test --config=playwright.standalone.config.ts",
+    "test": "npm run test:e2e && npm run test:standalone"
   },
   "dependencies": {
     "@tailwindcss/vite": "4.3.3",
