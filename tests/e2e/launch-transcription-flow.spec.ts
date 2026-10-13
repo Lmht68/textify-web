@@ -66,8 +66,23 @@ test('should poll every two seconds and render completed text when the backend c
 
   const activeTranscription = page.getByRole('article', { name: 'Transcription status' });
 
-  await expect(activeTranscription.getByText('Getting your transcript ready', { exact: true })).toBeVisible();
   await expect(activeTranscription.getByText(sourceUrl, { exact: true })).toBeVisible();
+  const queuedStatus = activeTranscription.locator('.active-transcription-status');
+  const queuedEllipsis = activeTranscription.locator('.processing-ellipsis');
+  const queuedDots = queuedEllipsis.locator('.processing-ellipsis-dot');
+
+  await expect(queuedStatus).toBeVisible();
+  await expect(queuedEllipsis).toBeVisible();
+  expect(await queuedStatus.textContent()).toBe('Getting your transcript ready...');
+  expect(await activeTranscription.ariaSnapshot()).not.toContain('...');
+  await expect(queuedDots).toHaveCount(3);
+  await expect
+    .poll(() =>
+      queuedDots.evaluateAll((dots) =>
+        dots.flatMap((dot) => dot.getAnimations().map((animation) => animation.playState)),
+      ),
+    )
+    .toEqual(['running', 'running', 'running']);
   await expect(activeTranscription.getByText("This might take a moment. You can leave this tab open while we work.")).toBeVisible();
   await expect(page.getByRole('button', { name: 'Transcribe' })).toBeEnabled();
   await expect(page.getByLabel('Video link')).toBeEnabled();
@@ -77,7 +92,30 @@ test('should poll every two seconds and render completed text when the backend c
   expect(statusRequestCount).toBe(0);
 
   await page.clock.fastForward(1);
-  await expect(activeTranscription.getByText('Turning your video into text', { exact: true })).toBeVisible();
+  const processingStatus = activeTranscription.locator('.active-transcription-status');
+  const processingEllipsis = activeTranscription.locator('.processing-ellipsis');
+  const processingDots = processingEllipsis.locator('.processing-ellipsis-dot');
+
+  await expect(processingStatus).toBeVisible();
+  await expect(processingEllipsis).toBeVisible();
+  expect(await processingStatus.textContent()).toBe('Turning your video into text...');
+  expect(await activeTranscription.ariaSnapshot()).not.toContain('...');
+  await expect(processingDots).toHaveCount(3);
+  await expect
+    .poll(() =>
+      processingDots.evaluateAll((dots) =>
+        dots.flatMap((dot) => dot.getAnimations().map((animation) => animation.playState)),
+      ),
+    )
+    .toEqual(['running', 'running', 'running']);
+  expect(statusRequestCount).toBe(1);
+
+  await page.emulateMedia({ reducedMotion: 'reduce' });
+  expect(await processingStatus.textContent()).toBe('Turning your video into text...');
+  await expect(processingDots).toHaveText(['.', '.', '.']);
+  await expect
+    .poll(() => processingDots.evaluateAll((dots) => dots.map((dot) => dot.getAnimations().length)))
+    .toEqual([0, 0, 0]);
   expect(statusRequestCount).toBe(1);
 
   await page.clock.fastForward(2_000);

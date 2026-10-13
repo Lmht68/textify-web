@@ -1,15 +1,17 @@
+import { ProcessingEllipsis } from './ProcessingEllipsis';
+
 type RecoveryPanelProps =
   | Readonly<{
-      kind: 'terminal';
-      onRetry: () => void;
-      onEdit: () => void;
-    }>
+    kind: 'terminal';
+    onRetry: () => void;
+    onEdit: () => void;
+  }>
   | Readonly<{
-      kind: 'temporary';
-      submittedUrl: string;
-      onRetry: () => void;
-      onCancel: () => void;
-    }>;
+    kind: 'temporary';
+    submittedUrl: string;
+    onRetry: () => void;
+    onCancel: () => void;
+  }>;
 
 const TerminalFailureIcon = () => {
   return (
@@ -58,7 +60,10 @@ export const RecoveryPanel = (props: RecoveryPanelProps) => {
         <TemporaryInterruptionIcon />
         <h2 id="temporary-recovery-title">Temporary interruption</h2>
       </div>
-      <p>We can&apos;t check for updates right now. Your transcription may still be running. We&apos;ll try again automatically every 2 seconds.</p>
+      <p>
+        We can&apos;t check for updates right now. Your transcription may still be running. We&apos;ll keep you updated
+        <ProcessingEllipsis />
+      </p>
       <p className="submitted-url">{props.submittedUrl}</p>
       <div className="recovery-panel-actions">
         <button className="recovery-panel-primary-action" type="button" onClick={props.onRetry}>

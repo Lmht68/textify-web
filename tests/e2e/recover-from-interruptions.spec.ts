@@ -107,7 +107,17 @@ test('should show Temporary interruption when transcription updates are unavaila
 
   const recoveryPanel = page.getByRole('alert');
   await expect(recoveryPanel.getByRole('heading', { name: 'Temporary interruption' })).toBeVisible();
-  await expect(recoveryPanel).toContainText("We can't check for updates right now. Your transcription may still be running. We'll try again automatically every 2 seconds.");
+  const updateMessage = recoveryPanel.locator('p:not(.submitted-url)');
+  const updateEllipsis = updateMessage.locator('.processing-ellipsis');
+  const updateDots = updateEllipsis.locator('.processing-ellipsis-dot');
+
+  await expect(updateEllipsis).toBeVisible();
+  expect(await updateMessage.textContent()).toBe(
+    "We can't check for updates right now. Your transcription may still be running. We'll keep you updated...",
+  );
+  expect(await recoveryPanel.ariaSnapshot()).not.toContain('...');
+  await expect(updateDots).toHaveCount(3);
+  await expect(recoveryPanel).toContainText("We can't check for updates right now. Your transcription may still be running. We'll keep you updated.");
   await expect(recoveryPanel).toContainText(sourceUrl);
   const recoveryCopy = await recoveryPanel.innerText();
 

@@ -299,7 +299,7 @@ test('should show a Temporary interruption when the API returns a retryable stat
   const recoveryPanel = page.getByRole('alert');
   await expect(recoveryPanel.getByRole('heading', { name: 'Temporary interruption' })).toBeVisible();
   await expect(recoveryPanel).toContainText(
-    "We can't check for updates right now. Your transcription may still be running. We'll try again automatically every 2 seconds.",
+    "We can't check for updates right now. Your transcription may still be running. We'll keep you updated.",
   );
   await expect(recoveryPanel).toContainText(sourceUrl);
   const recoveryCopy = await recoveryPanel.innerText();

@@ -70,6 +70,7 @@ export const TranscriptionFlow = () => {
         <ActiveTranscription
           submittedUrl={activeState.submittedUrl}
           statusMessage={lifecycleMessage}
+          showAnimatedEllipsis={state.status === 'queued' || state.status === 'processing'}
           onCancel={state.status === 'queued' || state.status === 'processing' ? cancel : null}
         />
       )}

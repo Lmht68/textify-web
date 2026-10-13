@@ -306,6 +306,36 @@ button:disabled {
   letter-spacing: -0.015em;
 }
 
+.processing-ellipsis {
+  display: inline-flex;
+  width: 1.125em;
+}
+
+.processing-ellipsis-dot {
+  opacity: 1;
+  animation: processing-ellipsis-pulse 1.2s ease-in-out infinite;
+}
+
+.processing-ellipsis-dot:nth-child(2) {
+  animation-delay: 150ms;
+}
+
+.processing-ellipsis-dot:nth-child(3) {
+  animation-delay: 300ms;
+}
+
+@keyframes processing-ellipsis-pulse {
+  0%,
+  60%,
+  100% {
+    opacity: 0.25;
+  }
+
+  30% {
+    opacity: 1;
+  }
+}
+
 .active-transcription-note {
   margin: 0.55rem 0 0;
   color: var(--muted-text);
@@ -1162,5 +1192,10 @@ button:disabled {
     transition-duration: 0.01ms !important;
     animation-duration: 0.01ms !important;
     animation-iteration-count: 1 !important;
+  }
+
+  .processing-ellipsis-dot {
+    opacity: 1;
+    animation: none;
   }
 }
