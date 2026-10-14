@@ -6,6 +6,7 @@ type SupportedPlatform = 'youtube' | 'tiktok' | 'instagram' | 'facebook' | 'x';
 type TranscriptionFormProps = Readonly<{
   inputValue: string;
   isSubmitting: boolean;
+  isRetryBlocked: boolean;
   validationMessage: string | null;
   focusInputRequest: number;
   onInputValueChange: (value: string) => void;
@@ -67,6 +68,7 @@ const PlatformIcon = ({ platform }: { readonly platform: SupportedPlatform }) =>
 export const TranscriptionForm = ({
   inputValue,
   isSubmitting,
+  isRetryBlocked,
   validationMessage,
   focusInputRequest,
   onInputValueChange,
@@ -109,9 +111,9 @@ export const TranscriptionForm = ({
           onChange={(event) => onInputValueChange(event.target.value)}
           aria-invalid={validationMessage !== null}
           aria-describedby={validationMessage === null ? undefined : 'video-link-validation'}
-          disabled={isSubmitting}
+          disabled={isSubmitting || isRetryBlocked}
         />
-        <button className="transcription-submit" type="submit" disabled={isSubmitting}>
+        <button className="transcription-submit" type="submit" disabled={isSubmitting || isRetryBlocked}>
           {isSubmitting ? 'Working...' : 'Transcribe'}
         </button>
       </form>

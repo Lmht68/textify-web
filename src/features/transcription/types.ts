@@ -37,7 +37,10 @@ export type SubmitTranscriptionJobResult =
   | Readonly<{ kind: 'accepted'; links: CapabilityLinks }>
   | Readonly<{ kind: 'aborted' }>
   | Readonly<{ kind: 'backend-rejected' }>
-  | Readonly<{ kind: 'unavailable' }>
+  | Readonly<{ kind: 'idempotency-conflict' }>
+  | Readonly<{ kind: 'capacity-exceeded'; retryAfterSeconds: number }>
+  | Readonly<{ kind: 'store-unavailable' }>
+  | Readonly<{ kind: 'network-unavailable' }>
   | Readonly<{ kind: 'contract-error' }>;
 
 export type CancelTranscriptionJobResult =

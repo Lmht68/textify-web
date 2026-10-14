@@ -20,8 +20,8 @@ export const TranscriptionFlow = () => {
   } = useTranscriptionFlow();
   const [focusInputRequest, setFocusInputRequest] = useState(0);
   const isSubmitting = state.status === 'submitting';
+  const isRetryBlocked = state.status === 'error' && state.retryAfterUntil !== null;
   const activeState = isSubmitting || state.status === 'queued' || state.status === 'processing' ? state : null;
-
   const handleEditSubmittedUrl = () => {
     editSubmittedUrl();
     setFocusInputRequest((currentRequest) => currentRequest + 1);
@@ -53,6 +53,7 @@ export const TranscriptionFlow = () => {
       <TranscriptionForm
         inputValue={inputValue}
         isSubmitting={isSubmitting}
+        isRetryBlocked={isRetryBlocked}
         validationMessage={validationMessage}
         focusInputRequest={focusInputRequest}
         onInputValueChange={setInputValue}
@@ -77,6 +78,11 @@ export const TranscriptionFlow = () => {
       {state.status === 'error' ? (
         <article className="transcription-error" role="alert">
           <p>{state.message}</p>
+          <div className="recovery-panel-actions">
+            <button className="recovery-panel-primary-action" type="button" onClick={submit} disabled={isRetryBlocked}>
+              Try again
+            </button>
+          </div>
         </article>
       ) : null}
       {state.status === 'terminal-failure' ? (

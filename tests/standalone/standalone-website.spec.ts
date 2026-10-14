@@ -216,11 +216,18 @@ test('should show truthful active work and cancel it when the API returns queued
   await page.getByRole('button', { name: 'Cancel' }).click();
   await expect(activeTranscription).not.toBeVisible();
   await expect(page.getByLabel('Video link')).toHaveValue('');
-  await expect.poll(() => standalone.requests()).toEqual([
-    { method: 'POST', path: '/api/transcription-jobs', body: JSON.stringify({ url: sourceUrl }) },
-    { method: 'GET', path: transcriptionStatusUrl, body: '' },
-    { method: 'PUT', path: transcriptionCancellationUrl, body: '' },
-  ]);
+  await expect.poll(() => standalone.requests()).toHaveLength(3);
+  const requests = standalone.requests();
+  expect(requests[0]).toMatchObject({
+    method: 'POST',
+    path: '/api/v1/transcription-jobs',
+    body: JSON.stringify({ url: sourceUrl }),
+  });
+  expect(requests[0].headers['idempotency-key']).toMatch(
+    /^[0-9a-f]{8}-[0-9a-f]{4}-4[0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/u,
+  );
+  expect(requests[1]).toMatchObject({ method: 'GET', path: transcriptionStatusUrl, body: '' });
+  expect(requests[2]).toMatchObject({ method: 'PUT', path: transcriptionCancellationUrl, body: '' });
   expectSameOriginApiRequests(browserApiUrls, standalone.origin);
   expectNoPreflight(standalone.requests());
 });
@@ -253,10 +260,17 @@ test('should render text-only and timestamped results when the API succeeds', as
   await expectResultActionGeometry(page, testInfo);
   await expectNoHorizontalOverflow(page);
   await expect(page).toHaveScreenshot('result-timestamped.png', { fullPage: true });
-  await expect.poll(() => standalone.requests()).toEqual([
-    { method: 'POST', path: '/api/transcription-jobs', body: JSON.stringify({ url: sourceUrl }) },
-    { method: 'GET', path: transcriptionStatusUrl, body: '' },
-  ]);
+  await expect.poll(() => standalone.requests()).toHaveLength(2);
+  const requests = standalone.requests();
+  expect(requests[0]).toMatchObject({
+    method: 'POST',
+    path: '/api/v1/transcription-jobs',
+    body: JSON.stringify({ url: sourceUrl }),
+  });
+  expect(requests[0].headers['idempotency-key']).toMatch(
+    /^[0-9a-f]{8}-[0-9a-f]{4}-4[0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/u,
+  );
+  expect(requests[1]).toMatchObject({ method: 'GET', path: transcriptionStatusUrl, body: '' });
   expectSameOriginApiRequests(browserApiUrls, standalone.origin);
   expectNoPreflight(standalone.requests());
 });

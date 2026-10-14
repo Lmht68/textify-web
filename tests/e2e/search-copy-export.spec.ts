@@ -33,7 +33,7 @@ const timestampedTranscript = `[00:00] First sentence. Second sentence.
 [1:01:01] Hour sentence one. Hour sentence two. Final unfinished utterance`;
 
 const openCompletedTranscript = async (page: Page) => {
-  await page.route('**/api/transcription-jobs**', async (route) => {
+  await page.route('**/api/v1/transcription-jobs**', async (route) => {
     if (route.request().method() === 'POST') {
       await route.fulfill({
         status: 202,

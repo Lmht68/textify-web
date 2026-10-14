@@ -20,7 +20,7 @@ test('should restore active Current transcription after reload and continue poll
   let statusRequestCount = 0;
 
   await page.clock.install({ time: new Date('2026-01-01T00:00:00Z') });
-  await page.route('**/api/transcription-jobs**', async (route) => {
+  await page.route('**/api/v1/transcription-jobs**', async (route) => {
     const request = route.request();
 
     if (request.method() === 'POST') {
@@ -68,7 +68,7 @@ test('should restore active Current transcription after reload and continue poll
 test('should restore a completed Current transcription after reopening without a status lookup', async ({ context, page }) => {
   let statusRequestCount = 0;
 
-  await page.route('**/api/transcription-jobs**', async (route) => {
+  await page.route('**/api/v1/transcription-jobs**', async (route) => {
     const request = route.request();
 
     if (request.method() === 'POST') {
@@ -116,7 +116,7 @@ test('should clear Current transcription before an active cancellation request c
   let cancellationBody: string | null = null;
   let releaseCancellation: (() => void) | null = null;
 
-  await page.route('**/api/transcription-jobs**', async (route) => {
+  await page.route('**/api/v1/transcription-jobs**', async (route) => {
     const request = route.request();
 
     if (request.method() === 'POST') {
@@ -170,7 +170,7 @@ test('should replace Current transcription and ignore a late response from the p
     markFirstInspectionStarted = resolve;
   });
 
-  await page.route('**/api/transcription-jobs**', async (route) => {
+  await page.route('**/api/v1/transcription-jobs**', async (route) => {
     const request = route.request();
     const path = new URL(request.url()).pathname;
     requestEvents.push(`${request.method()} ${path}`);
@@ -225,10 +225,10 @@ test('should replace Current transcription and ignore a late response from the p
   await page.getByRole('button', { name: 'Transcribe' }).click();
   await expect(page.getByRole('article', { name: 'Transcription status' })).toContainText(replacementSourceUrl);
   await expect.poll(() => requestEvents).toEqual([
-    `POST /api/transcription-jobs`,
+    `POST /api/v1/transcription-jobs`,
     `GET ${transcriptionStatusUrl}`,
     `PUT ${transcriptionCancellationUrl}`,
-    `POST /api/transcription-jobs`,
+    `POST /api/v1/transcription-jobs`,
   ]);
   expect(postBodies).toEqual([JSON.stringify({ url: sourceUrl }), JSON.stringify({ url: replacementSourceUrl })]);
   expect(firstCancellationBody).toBeNull();
@@ -242,7 +242,7 @@ test('should replace Current transcription and ignore a late response from the p
 test('should synchronize Current transcription and cancellation across same-origin tabs', async ({ context }) => {
   let cancellationRequestCount = 0;
 
-  await context.route('**/api/transcription-jobs**', async (route) => {
+  await context.route('**/api/v1/transcription-jobs**', async (route) => {
     const request = route.request();
 
     if (request.method() === 'POST') {
@@ -288,7 +288,7 @@ test('should synchronize Current transcription and cancellation across same-orig
 
 test('should clear unavailable restored work and explain how to start over', async ({ page }) => {
   await page.clock.install({ time: new Date('2026-01-01T00:00:00Z') });
-  await page.route('**/api/transcription-jobs**', async (route) => {
+  await page.route('**/api/v1/transcription-jobs**', async (route) => {
     const request = route.request();
 
     if (request.method() === 'POST') {

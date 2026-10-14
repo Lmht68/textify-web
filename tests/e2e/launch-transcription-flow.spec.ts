@@ -13,7 +13,7 @@ import {
 test('should show correction feedback without an HTTP request when the link is blank or not HTTPS', async ({ page }) => {
   let submissionRequestCount = 0;
 
-  await page.route('**/api/transcription-jobs', async (route) => {
+  await page.route('**/api/v1/transcription-jobs', async (route) => {
     submissionRequestCount += 1;
     await route.abort();
   });
@@ -38,7 +38,7 @@ test('should poll every two seconds and render completed text when the backend c
   let statusRequestCount = 0;
 
   await page.clock.install({ time: new Date('2026-01-01T00:00:00Z') });
-  await page.route('**/api/transcription-jobs**', async (route) => {
+  await page.route('**/api/v1/transcription-jobs**', async (route) => {
     const request = route.request();
 
     if (request.method() === 'POST') {

@@ -27,7 +27,7 @@ const timestampedReadingParagraphs = [
 test('should present source details and Reading paragraphs when a Current transcription succeeds', async ({ page }) => {
   let statusRequestCount = 0;
 
-  await page.route('**/api/transcription-jobs**', async (route) => {
+  await page.route('**/api/v1/transcription-jobs**', async (route) => {
     if (route.request().method() === 'POST') {
       await route.fulfill({
         status: 202,

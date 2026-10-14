@@ -12,7 +12,7 @@ import type { CapabilityLinks, TranscriptionResult, TranscriptView } from '../ty
 
 export type TranscriptionFlowState =
   | Readonly<{ status: 'idle' }>
-  | Readonly<{ status: 'submitting'; operationId: string; submittedUrl: string }>
+  | Readonly<{ status: 'submitting'; operationId: string; submittedUrl: string; idempotencyKey: string }>
   | Readonly<{ status: 'queued'; operationId: string; submittedUrl: string; links: CapabilityLinks; restored: boolean }>
   | Readonly<{ status: 'processing'; operationId: string; submittedUrl: string; links: CapabilityLinks; restored: boolean }>
   | Readonly<{
@@ -30,7 +30,14 @@ export type TranscriptionFlowState =
       transcriptView: TranscriptView;
     }>
   | Readonly<{ status: 'terminal-failure'; submittedUrl: string }>
-  | Readonly<{ status: 'error'; submittedUrl: string; message: string }>;
+  | Readonly<{
+      status: 'error';
+      operationId: string;
+      submittedUrl: string;
+      message: string;
+      idempotencyKey: string | null;
+      retryAfterUntil: number | null;
+    }>;
 
 export type UseTranscriptionFlowResult = Readonly<{
   inputValue: string;
@@ -47,10 +54,22 @@ export type UseTranscriptionFlowResult = Readonly<{
 
 const initialOutageMessage = "Textify couldn't start this transcript. Try again in a moment.";
 const unavailableRestoredMessage = 'That transcription is no longer available. Paste the link again to start over.';
+const idempotencyConflictMessage = 'This submission could not be retried safely. Try again to start a new transcript.';
 const cancelledErrorMessage = 'This transcription was cancelled. Submit the link again when you\'re ready.';
 const pollingIntervalMilliseconds = 2_000;
 
 const stateFromStoredCurrentTranscription = (snapshot: StoredCurrentTranscription | null): TranscriptionFlowState => {
+  if (snapshot?.kind === 'submitting') {
+    return {
+      status: 'error',
+      operationId: snapshot.operationId,
+      submittedUrl: snapshot.submittedUrl,
+      message: initialOutageMessage,
+      idempotencyKey: snapshot.idempotencyKey,
+      retryAfterUntil: null,
+    };
+  }
+
   if (snapshot?.kind === 'active') {
     return {
       status: snapshot.status,
@@ -75,11 +94,17 @@ const stateFromStoredCurrentTranscription = (snapshot: StoredCurrentTranscriptio
 };
 
 const inputFromStoredCurrentTranscription = (snapshot: StoredCurrentTranscription | null): string => {
-  return snapshot?.kind === 'active' || snapshot?.kind === 'completed' ? snapshot.submittedUrl : '';
+  return snapshot?.kind === 'submitting' || snapshot?.kind === 'active' || snapshot?.kind === 'completed'
+    ? snapshot.submittedUrl
+    : '';
 };
 
 const operationIdFromStoredCurrentTranscription = (snapshot: StoredCurrentTranscription | null): string | null => {
   return snapshot?.operationId ?? null;
+};
+
+const pendingSubmissionKeyFromStoredCurrentTranscription = (snapshot: StoredCurrentTranscription | null): string | null => {
+  return snapshot?.kind === 'submitting' ? snapshot.idempotencyKey : null;
 };
 
 export const useTranscriptionFlow = (): UseTranscriptionFlowResult => {
@@ -89,6 +114,7 @@ export const useTranscriptionFlow = (): UseTranscriptionFlowResult => {
   const [validationMessage, setValidationMessage] = useState<string | null>(null);
   const [noticeMessage, setNoticeMessage] = useState<string | null>(null);
   const submissionControllerRef = useRef<AbortController | null>(null);
+  const pendingSubmissionKeyRef = useRef<string | null>(pendingSubmissionKeyFromStoredCurrentTranscription(initialSnapshot));
   const operationIdRef = useRef(operationIdFromStoredCurrentTranscription(initialSnapshot));
   const persistedOperationIdRef = useRef(operationIdFromStoredCurrentTranscription(initialSnapshot));
   const [immediateRetryVersion, setImmediateRetryVersion] = useState(0);
@@ -99,6 +125,7 @@ export const useTranscriptionFlow = (): UseTranscriptionFlowResult => {
   const applyStoredCurrentTranscription = useCallback((snapshot: StoredCurrentTranscription | null) => {
     operationIdRef.current = operationIdFromStoredCurrentTranscription(snapshot);
     persistedOperationIdRef.current = operationIdFromStoredCurrentTranscription(snapshot);
+    pendingSubmissionKeyRef.current = pendingSubmissionKeyFromStoredCurrentTranscription(snapshot);
     setInputValueState(inputFromStoredCurrentTranscription(snapshot));
     setValidationMessage(null);
     setState(stateFromStoredCurrentTranscription(snapshot));
@@ -277,7 +304,14 @@ export const useTranscriptionFlow = (): UseTranscriptionFlowResult => {
                 return;
               }
 
-              setState({ status: 'error', submittedUrl: state.submittedUrl, message: cancelledErrorMessage });
+              setState({
+                status: 'error',
+                operationId: state.operationId,
+                submittedUrl: state.submittedUrl,
+                message: cancelledErrorMessage,
+                idempotencyKey: null,
+                retryAfterUntil: null,
+              });
               return;
             }
             case 'not-found':
@@ -318,6 +352,26 @@ export const useTranscriptionFlow = (): UseTranscriptionFlowResult => {
   }, [immediateRetryVersion, persistCurrentSnapshot, state]);
 
   const setInputValue = useCallback((value: string) => {
+    pendingSubmissionKeyRef.current = null;
+    const snapshot = readStoredCurrentTranscription();
+
+    if (snapshot?.kind === 'submitting' && persistedOperationIdRef.current === snapshot.operationId) {
+      const clearedSnapshot: StoredCurrentTranscription = {
+        version: 1,
+        kind: 'cleared',
+        operationId: snapshot.operationId,
+      };
+
+      if (
+        updateStoredCurrentTranscription({
+          expectedOperationId: snapshot.operationId,
+          snapshot: clearedSnapshot,
+        }) === 'written'
+      ) {
+        persistedOperationIdRef.current = null;
+      }
+    }
+
     setInputValueState(value);
     setValidationMessage(null);
     setNoticeMessage(null);
@@ -365,6 +419,7 @@ export const useTranscriptionFlow = (): UseTranscriptionFlowResult => {
       return;
     }
 
+    pendingSubmissionKeyRef.current = null;
     const cancellationUrl = state.links.cancel;
     const operationId = crypto.randomUUID();
     operationIdRef.current = operationId;
@@ -392,6 +447,14 @@ export const useTranscriptionFlow = (): UseTranscriptionFlowResult => {
   }, [state]);
 
   const submit = useCallback(async () => {
+    if (
+      state.status === 'error' &&
+      state.retryAfterUntil !== null &&
+      state.retryAfterUntil > Date.now()
+    ) {
+      return;
+    }
+
     const trimmedInput = inputValue.trim();
 
     if (trimmedInput.length === 0) {
@@ -415,25 +478,40 @@ export const useTranscriptionFlow = (): UseTranscriptionFlowResult => {
       state.status === 'queued' || state.status === 'processing' || state.status === 'temporary-interruption'
         ? state.links.cancel
         : null;
+    const idempotencyKey =
+      state.status === 'error' && pendingSubmissionKeyRef.current !== null
+        ? pendingSubmissionKeyRef.current
+        : crypto.randomUUID();
+    pendingSubmissionKeyRef.current = idempotencyKey;
     const operationId = crypto.randomUUID();
     submissionControllerRef.current?.abort();
     const controller = new AbortController();
     submissionControllerRef.current = controller;
     operationIdRef.current = operationId;
     persistedOperationIdRef.current =
-      writeStoredCurrentTranscription({ version: 1, kind: 'submitting', operationId, submittedUrl: trimmedInput }) === 'written'
+      writeStoredCurrentTranscription({
+        version: 1,
+        kind: 'submitting',
+        operationId,
+        submittedUrl: trimmedInput,
+        idempotencyKey,
+      }) === 'written'
         ? operationId
         : null;
     setInputValueState(trimmedInput);
     setValidationMessage(null);
-    setState({ status: 'submitting', operationId, submittedUrl: trimmedInput });
+    setState({ status: 'submitting', operationId, submittedUrl: trimmedInput, idempotencyKey });
     setNoticeMessage(null);
 
     if (priorCancellationUrl !== null) {
       void cancelTranscriptionJob({ cancellationUrl: priorCancellationUrl });
     }
 
-    const submission = await submitTranscriptionJob({ sourceUrl: trimmedInput, signal: controller.signal });
+    const submission = await submitTranscriptionJob({
+      sourceUrl: trimmedInput,
+      idempotencyKey,
+      signal: controller.signal,
+    });
 
     if (
       submissionControllerRef.current !== controller ||
@@ -447,6 +525,7 @@ export const useTranscriptionFlow = (): UseTranscriptionFlowResult => {
 
     switch (submission.kind) {
       case 'accepted': {
+        pendingSubmissionKeyRef.current = null;
         const activeSnapshot: StoredCurrentTranscription = {
           version: 1,
           kind: 'active',
@@ -470,6 +549,7 @@ export const useTranscriptionFlow = (): UseTranscriptionFlowResult => {
         return;
       }
       case 'backend-rejected': {
+        pendingSubmissionKeyRef.current = null;
         const clearedSnapshot: StoredCurrentTranscription = { version: 1, kind: 'cleared', operationId };
 
         if (persistCurrentSnapshot(operationId, clearedSnapshot)) {
@@ -479,17 +559,66 @@ export const useTranscriptionFlow = (): UseTranscriptionFlowResult => {
         setState({ status: 'terminal-failure', submittedUrl: trimmedInput });
         return;
       }
-      case 'unavailable':
-      case 'contract-error': {
+      case 'idempotency-conflict': {
+        pendingSubmissionKeyRef.current = null;
         const clearedSnapshot: StoredCurrentTranscription = { version: 1, kind: 'cleared', operationId };
 
         if (persistCurrentSnapshot(operationId, clearedSnapshot)) {
           return;
         }
 
-        setState({ status: 'error', submittedUrl: trimmedInput, message: initialOutageMessage });
+        setState({
+          status: 'error',
+          operationId,
+          submittedUrl: trimmedInput,
+          message: idempotencyConflictMessage,
+          idempotencyKey: null,
+          retryAfterUntil: null,
+        });
         return;
       }
+      case 'capacity-exceeded': {
+        const retryAfterUntil =
+          submission.retryAfterSeconds > 0 ? Date.now() + submission.retryAfterSeconds * 1_000 : null;
+
+        if (retryAfterUntil !== null) {
+          window.setTimeout(() => {
+            setState((currentState) => {
+              if (
+                currentState.status !== 'error' ||
+                currentState.operationId !== operationId ||
+                currentState.retryAfterUntil !== retryAfterUntil
+              ) {
+                return currentState;
+              }
+
+              return { ...currentState, retryAfterUntil: null };
+            });
+          }, submission.retryAfterSeconds * 1_000);
+        }
+
+        setState({
+          status: 'error',
+          operationId,
+          submittedUrl: trimmedInput,
+          message: initialOutageMessage,
+          idempotencyKey,
+          retryAfterUntil,
+        });
+        return;
+      }
+      case 'store-unavailable':
+      case 'network-unavailable':
+      case 'contract-error':
+        setState({
+          status: 'error',
+          operationId,
+          submittedUrl: trimmedInput,
+          message: initialOutageMessage,
+          idempotencyKey,
+          retryAfterUntil: null,
+        });
+        return;
     }
   }, [inputValue, persistCurrentSnapshot, state]);
 

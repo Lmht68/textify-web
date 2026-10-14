@@ -19,6 +19,7 @@ export type RecordedApiRequest = Readonly<{
   method: string;
   path: string;
   body: string;
+  headers: Readonly<Record<string, string>>;
 }>;
 
 export type ControlledTranscriptionApi = Readonly<{
@@ -29,8 +30,8 @@ export type ControlledTranscriptionApi = Readonly<{
   close: () => Promise<void>;
 }>;
 
-const inspectionPath = /^\/api\/transcription-jobs\/[^/]+$/u;
-const cancellationPath = /^\/api\/transcription-jobs\/[^/]+\/cancellation$/u;
+const inspectionPath = /^\/api\/v1\/transcription-jobs\/[^/]+$/u;
+const cancellationPath = /^\/api\/v1\/transcription-jobs\/[^/]+\/cancellation$/u;
 
 const readRequestBody = async (request: IncomingMessage): Promise<string> => {
   const chunks: Buffer[] = [];
@@ -94,7 +95,14 @@ export const createControlledTranscriptionApi = async (): Promise<ControlledTran
     const body = await readRequestBody(request);
     const method = request.method ?? 'GET';
 
-    recordedRequests.push({ method, path, body });
+    const idempotencyKeyHeader = request.headers['idempotency-key'];
+    const idempotencyKey = typeof idempotencyKeyHeader === 'string' ? idempotencyKeyHeader : '';
+    recordedRequests.push({
+      method,
+      path,
+      body,
+      headers: { 'idempotency-key': idempotencyKey },
+    });
 
     if (scenario === null) {
       sendResponse(response, { status: 500 });
@@ -103,7 +111,7 @@ export const createControlledTranscriptionApi = async (): Promise<ControlledTran
 
     const pathname = new URL(path, 'http://controlled-api.test').pathname;
 
-    if (method === 'POST' && pathname === '/api/transcription-jobs') {
+    if (method === 'POST' && pathname === '/api/v1/transcription-jobs') {
       sendResponse(response, scenario.submission);
       return;
     }

@@ -1,6 +1,6 @@
 export const fakeCapabilityId = '00000000-0000-4000-8000-000000000000';
 export const sourceUrl = 'https://www.youtube.com/watch?v=AbCdEf12345';
-export const transcriptionStatusUrl = `/api/transcription-jobs/${fakeCapabilityId}`;
+export const transcriptionStatusUrl = `/api/v1/transcription-jobs/${fakeCapabilityId}`;
 export const transcriptionCancellationUrl = `${transcriptionStatusUrl}/cancellation`;
 
 export const acceptedJobHeaders = {
@@ -93,7 +93,7 @@ export const failedJob = {
 
 export const replacementCapabilityId = '11111111-1111-4111-8111-111111111111';
 export const replacementSourceUrl = 'https://www.youtube.com/watch?v=ZyXwVu98765';
-export const replacementTranscriptionStatusUrl = `/api/transcription-jobs/${replacementCapabilityId}`;
+export const replacementTranscriptionStatusUrl = `/api/v1/transcription-jobs/${replacementCapabilityId}`;
 export const replacementTranscriptionCancellationUrl = `${replacementTranscriptionStatusUrl}/cancellation`;
 
 export const replacementQueuedJob = {

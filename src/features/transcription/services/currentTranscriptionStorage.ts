@@ -5,46 +5,40 @@ import type { CapabilityLinks, TranscriptionResult, TranscriptView } from '../ty
 export const currentTranscriptionStorageKey = 'textify.current-transcription';
 
 const operationIdSchema = z.uuid();
+const idempotencyKeySchema = z.string().regex(/^[0-9a-f]{8}-[0-9a-f]{4}-4[0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/u);
 const submittedUrlSchema = z.url().refine((value) => new URL(value).protocol === 'https:');
 
-const submittingSnapshotSchema = z
-  .object({
-    version: z.literal(1),
-    kind: z.literal('submitting'),
-    operationId: operationIdSchema,
-    submittedUrl: submittedUrlSchema,
-  })
-  .strict();
+const submittingSnapshotSchema = z.object({
+  version: z.literal(1),
+  kind: z.literal('submitting'),
+  operationId: operationIdSchema,
+  submittedUrl: submittedUrlSchema,
+  idempotencyKey: idempotencyKeySchema,
+});
 
-const clearedSnapshotSchema = z
-  .object({
-    version: z.literal(1),
-    kind: z.literal('cleared'),
-    operationId: operationIdSchema,
-  })
-  .strict();
+const clearedSnapshotSchema = z.object({
+  version: z.literal(1),
+  kind: z.literal('cleared'),
+  operationId: operationIdSchema,
+});
 
-const activeSnapshotSchema = z
-  .object({
-    version: z.literal(1),
-    kind: z.literal('active'),
-    operationId: operationIdSchema,
-    status: z.enum(['queued', 'processing']),
-    submittedUrl: submittedUrlSchema,
-    links: activeLinksSchema,
-  })
-  .strict();
+const activeSnapshotSchema = z.object({
+  version: z.literal(1),
+  kind: z.literal('active'),
+  operationId: operationIdSchema,
+  status: z.enum(['queued', 'processing']),
+  submittedUrl: submittedUrlSchema,
+  links: activeLinksSchema,
+});
 
-const completedSnapshotSchema = z
-  .object({
-    version: z.literal(1),
-    kind: z.literal('completed'),
-    operationId: operationIdSchema,
-    submittedUrl: submittedUrlSchema,
-    result: transcriptionResultSchema,
-    transcriptView: z.enum(['text-only', 'timestamped']).default('text-only'),
-  })
-  .strict();
+const completedSnapshotSchema = z.object({
+  version: z.literal(1),
+  kind: z.literal('completed'),
+  operationId: operationIdSchema,
+  submittedUrl: submittedUrlSchema,
+  result: transcriptionResultSchema,
+  transcriptView: z.enum(['text-only', 'timestamped']).default('text-only'),
+});
 
 const storedCurrentTranscriptionSchema = z.discriminatedUnion('kind', [
   submittingSnapshotSchema,
@@ -54,7 +48,13 @@ const storedCurrentTranscriptionSchema = z.discriminatedUnion('kind', [
 ]);
 
 export type StoredCurrentTranscription =
-  | Readonly<{ version: 1; kind: 'submitting'; operationId: string; submittedUrl: string }>
+  | Readonly<{
+      version: 1;
+      kind: 'submitting';
+      operationId: string;
+      submittedUrl: string;
+      idempotencyKey: string;
+    }>
   | Readonly<{ version: 1; kind: 'cleared'; operationId: string }>
   | Readonly<{
       version: 1;

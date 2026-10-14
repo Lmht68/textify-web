@@ -15,7 +15,7 @@ import {
 
 test('should show plain-language terminal recovery when a transcription finishes unsuccessfully', async ({ page }) => {
   await page.clock.install({ time: new Date('2026-01-01T00:00:00Z') });
-  await page.route('**/api/transcription-jobs**', async (route) => {
+  await page.route('**/api/v1/transcription-jobs**', async (route) => {
     if (route.request().method() === 'POST') {
       await route.fulfill({
         status: 202,
@@ -53,10 +53,12 @@ test('should show plain-language terminal recovery when a transcription finishes
 
 test('should preserve and resubmit a rejected link when the visitor retries or edits it', async ({ page }) => {
   const postBodies: Array<string | null> = [];
+  const postKeys: Array<string | undefined> = [];
 
-  await page.route('**/api/transcription-jobs**', async (route) => {
+  await page.route('**/api/v1/transcription-jobs**', async (route) => {
     if (route.request().method() === 'POST') {
       postBodies.push(route.request().postData());
+      postKeys.push(route.request().headers()['idempotency-key']);
       await route.fulfill({ status: 400 });
       return;
     }
@@ -75,6 +77,10 @@ test('should preserve and resubmit a rejected link when the visitor retries or e
 
   await page.getByRole('button', { name: 'Try again' }).click();
   await expect.poll(() => postBodies).toEqual([JSON.stringify({ url: sourceUrl }), JSON.stringify({ url: sourceUrl })]);
+  expect(postKeys).toHaveLength(2);
+  expect(postKeys[0]).toMatch(/^[0-9a-f]{8}-[0-9a-f]{4}-4[0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/u);
+  expect(postKeys[1]).toMatch(/^[0-9a-f]{8}-[0-9a-f]{4}-4[0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/u);
+  expect(postKeys[1]).not.toBe(postKeys[0]);
 
   await page.getByRole('button', { name: 'Edit link' }).click();
   await expect(recoveryPanel).not.toBeVisible();
@@ -82,9 +88,131 @@ test('should preserve and resubmit a rejected link when the visitor retries or e
   await expect(videoLink).toBeFocused();
 });
 
+test('should reuse an idempotency key after an ambiguous submission failure', async ({ page }) => {
+  const postKeys: Array<string | undefined> = [];
+
+  await page.route('**/api/v1/transcription-jobs**', async (route) => {
+    if (route.request().method() === 'POST') {
+      postKeys.push(route.request().headers()['idempotency-key']);
+      if (postKeys.length === 1) {
+        await route.abort();
+        return;
+      }
+
+      await route.fulfill({
+        status: 202,
+        headers: acceptedJobHeaders,
+        body: JSON.stringify(queuedJob),
+      });
+      return;
+    }
+
+    await route.abort();
+  });
+  await page.goto('/');
+
+  await page.getByLabel('Video link').fill(sourceUrl);
+  await page.getByRole('button', { name: 'Transcribe' }).click();
+  const recoveryPanel = page.getByRole('alert');
+  await expect(recoveryPanel).toContainText("Textify couldn't start this transcript. Try again in a moment.");
+
+  await page.getByRole('button', { name: 'Try again' }).click();
+  await expect.poll(() => postKeys).toHaveLength(2);
+  expect(postKeys[0]).toMatch(/^[0-9a-f]{8}-[0-9a-f]{4}-4[0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/u);
+  expect(postKeys[1]).toBe(postKeys[0]);
+});
+
+test('should reuse a persisted idempotency key after reload when the first submission is ambiguous', async ({ page }) => {
+  const postKeys: Array<string | undefined> = [];
+
+  await page.route('**/api/v1/transcription-jobs**', async (route) => {
+    if (route.request().method() !== 'POST') {
+      await route.abort();
+      return;
+    }
+
+    postKeys.push(route.request().headers()['idempotency-key']);
+
+    if (postKeys.length === 1) {
+      await route.abort();
+      return;
+    }
+
+    await route.fulfill({
+      status: 202,
+      headers: acceptedJobHeaders,
+      body: JSON.stringify({
+        ...queuedJob,
+        additive_response_field: true,
+        links: { ...queuedJob.links, additive_link_field: 'ignored' },
+      }),
+    });
+  });
+  await page.goto('/');
+  await page.getByLabel('Video link').fill(sourceUrl);
+  await page.getByRole('button', { name: 'Transcribe' }).click();
+  await expect(page.getByRole('alert')).toContainText("Textify couldn't start this transcript. Try again in a moment.");
+
+  await page.reload();
+  await expect(page.getByLabel('Video link')).toHaveValue(sourceUrl);
+  await page.getByRole('button', { name: 'Try again' }).click();
+
+  await expect.poll(() => postKeys).toHaveLength(2);
+  expect(postKeys[1]).toBe(postKeys[0]);
+});
+
+test('should enforce an integer capacity retry delay when the backend reports capacity exhaustion', async ({ page }) => {
+  const postKeys: Array<string | undefined> = [];
+
+  await page.clock.install({ time: new Date('2026-01-01T00:00:00Z') });
+  await page.route('**/api/v1/transcription-jobs**', async (route) => {
+    if (route.request().method() !== 'POST') {
+      await route.abort();
+      return;
+    }
+
+    postKeys.push(route.request().headers()['idempotency-key']);
+
+    if (postKeys.length === 1) {
+      await route.fulfill({
+        status: 503,
+        headers: { 'content-type': 'application/json', 'Retry-After': '2' },
+        body: JSON.stringify({
+          error: {
+            code: 'transcription_capacity_exceeded',
+            message: 'Capacity is currently full.',
+          },
+        }),
+      });
+      return;
+    }
+
+    await route.fulfill({
+      status: 202,
+      headers: acceptedJobHeaders,
+      body: JSON.stringify(queuedJob),
+    });
+  });
+  await page.goto('/');
+  await page.getByLabel('Video link').fill(sourceUrl);
+  await page.getByRole('button', { name: 'Transcribe' }).click();
+
+  const retryButton = page.getByRole('button', { name: 'Try again' });
+  await expect(retryButton).toBeDisabled();
+  await expect(page.getByRole('button', { name: 'Transcribe' })).toBeDisabled();
+  await page.clock.fastForward(1_000);
+  await expect(retryButton).toBeDisabled();
+  await page.clock.fastForward(1_000);
+  await expect(retryButton).toBeEnabled();
+  await retryButton.click();
+
+  await expect.poll(() => postKeys).toHaveLength(2);
+  expect(postKeys[1]).toBe(postKeys[0]);
+});
+
 test('should show Temporary interruption when transcription updates are unavailable', async ({ page }) => {
   await page.clock.install({ time: new Date('2026-01-01T00:00:00Z') });
-  await page.route('**/api/transcription-jobs**', async (route) => {
+  await page.route('**/api/v1/transcription-jobs**', async (route) => {
     if (route.request().method() === 'POST') {
       await route.fulfill({
         status: 202,
@@ -130,7 +258,7 @@ test('should return to the active transcription when the visitor retries a tempo
   let statusRequestCount = 0;
 
   await page.clock.install({ time: new Date('2026-01-01T00:00:00Z') });
-  await page.route('**/api/transcription-jobs**', async (route) => {
+  await page.route('**/api/v1/transcription-jobs**', async (route) => {
     if (route.request().method() === 'POST') {
       await route.fulfill({
         status: 202,
@@ -169,7 +297,7 @@ test('should retry exactly after two seconds when a temporary interruption conti
   let statusRequestCount = 0;
 
   await page.clock.install({ time: new Date('2026-01-01T00:00:00Z') });
-  await page.route('**/api/transcription-jobs**', async (route) => {
+  await page.route('**/api/v1/transcription-jobs**', async (route) => {
     if (route.request().method() === 'POST') {
       await route.fulfill({
         status: 202,
@@ -209,7 +337,7 @@ test('should clear an interrupted transcription when the visitor cancels it', as
   let cancellationPath: string | null = null;
 
   await page.clock.install({ time: new Date('2026-01-01T00:00:00Z') });
-  await page.route('**/api/transcription-jobs**', async (route) => {
+  await page.route('**/api/v1/transcription-jobs**', async (route) => {
     const request = route.request();
 
     if (request.method() === 'POST') {
@@ -252,7 +380,7 @@ test('should recover the active transcription when the browser reconnects', asyn
   let statusRequestCount = 0;
 
   await page.clock.install({ time: new Date('2026-01-01T00:00:00Z') });
-  await page.route('**/api/transcription-jobs**', async (route) => {
+  await page.route('**/api/v1/transcription-jobs**', async (route) => {
     if (route.request().method() === 'POST') {
       await route.fulfill({
         status: 202,
@@ -293,7 +421,7 @@ test('should replace interrupted work when the visitor submits another link', as
   let cancellationPath: string | null = null;
 
   await page.clock.install({ time: new Date('2026-01-01T00:00:00Z') });
-  await page.route('**/api/transcription-jobs**', async (route) => {
+  await page.route('**/api/v1/transcription-jobs**', async (route) => {
     const request = route.request();
 
     if (request.method() === 'POST') {

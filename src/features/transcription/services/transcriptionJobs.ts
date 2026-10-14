@@ -1,8 +1,13 @@
 import { z } from 'zod';
 import { activeLinksSchema, transcriptionResultSchema } from './transcriptionSchemas';
-import type { CancelTranscriptionJobResult, CapabilityLinks, InspectTranscriptionJobResult, SubmitTranscriptionJobResult } from '../types';
+import type {
+  CancelTranscriptionJobResult,
+  CapabilityLinks,
+  InspectTranscriptionJobResult,
+  SubmitTranscriptionJobResult,
+} from '../types';
 
-const jobPathPrefix = '/api/transcription-jobs/';
+const jobPathPrefix = '/api/v1/transcription-jobs/';
 const uuidV4Pattern = '[0-9a-f]{8}-[0-9a-f]{4}-4[0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}';
 const selfPathPattern = new RegExp(`^${jobPathPrefix}(${uuidV4Pattern})$`);
 const cancellationPathPattern = new RegExp(`^${jobPathPrefix}(${uuidV4Pattern})/cancellation$`);
@@ -19,6 +24,7 @@ const publicErrorCodes = [
   'audio_download_failed',
   'transcription_failed',
   'transcription_capacity_exceeded',
+  'idempotency_conflict',
   'job_not_found',
   'job_already_finished',
   'job_store_unavailable',
@@ -32,69 +38,55 @@ const publicErrorCodes = [
 
 const uuidV4Schema = z.string().regex(new RegExp(`^${uuidV4Pattern}$`));
 const timestampSchema = z.string().datetime({ offset: true });
-const terminalLinksSchema = z
-  .object({
-    self: z.string(),
-  })
-  .strict();
-const queuedResponseSchema = z
-  .object({
-    id: uuidV4Schema,
-    status: z.literal('queued'),
-    submitted_at: timestampSchema,
-    links: activeLinksSchema,
-  })
-  .strict();
-const processingResponseSchema = z
-  .object({
-    id: uuidV4Schema,
-    status: z.literal('processing'),
-    submitted_at: timestampSchema,
-    started_at: timestampSchema,
-    cancellation_requested: z.boolean(),
-    links: activeLinksSchema,
-  })
-  .strict();
-const succeededResponseSchema = z
-  .object({
-    id: uuidV4Schema,
-    status: z.literal('finished'),
-    outcome: z.literal('succeeded'),
-    submitted_at: timestampSchema,
-    started_at: timestampSchema,
-    finished_at: timestampSchema,
-    result: transcriptionResultSchema,
-    links: terminalLinksSchema,
-  })
-  .strict();
-const failedResponseSchema = z
-  .object({
-    id: uuidV4Schema,
-    status: z.literal('finished'),
-    outcome: z.literal('failed'),
-    submitted_at: timestampSchema,
-    started_at: timestampSchema.nullable(),
-    finished_at: timestampSchema,
-    error: z
-      .object({
-        code: z.enum(publicErrorCodes),
-        message: z.string().min(1),
-      })
-      .strict(),
-    links: terminalLinksSchema,
-  })
-  .strict();
-const cancelledResponseSchema = z
-  .object({
-    id: uuidV4Schema,
-    status: z.literal('finished'),
-    outcome: z.literal('cancelled'),
-    submitted_at: timestampSchema,
-    started_at: timestampSchema.nullable(),
-    finished_at: timestampSchema,
-    links: terminalLinksSchema,
-  })
-  .strict();
+const terminalLinksSchema = z.object({
+  self: z.string(),
+});
+const queuedResponseSchema = z.object({
+  id: uuidV4Schema,
+  status: z.literal('queued'),
+  submitted_at: timestampSchema,
+  links: activeLinksSchema,
+});
+const processingResponseSchema = z.object({
+  id: uuidV4Schema,
+  status: z.literal('processing'),
+  submitted_at: timestampSchema,
+  started_at: timestampSchema,
+  cancellation_requested: z.boolean(),
+  links: activeLinksSchema,
+});
+const succeededResponseSchema = z.object({
+  id: uuidV4Schema,
+  status: z.literal('finished'),
+  outcome: z.literal('succeeded'),
+  submitted_at: timestampSchema,
+  started_at: timestampSchema,
+  finished_at: timestampSchema,
+  result: transcriptionResultSchema,
+  links: terminalLinksSchema,
+});
+const failedResponseSchema = z.object({
+  id: uuidV4Schema,
+  status: z.literal('finished'),
+  outcome: z.literal('failed'),
+  submitted_at: timestampSchema,
+  started_at: timestampSchema.nullable(),
+  finished_at: timestampSchema,
+  error: z.object({
+    code: z.enum(publicErrorCodes),
+    message: z.string().min(1),
+  }),
+  links: terminalLinksSchema,
+});
+const cancelledResponseSchema = z.object({
+  id: uuidV4Schema,
+  status: z.literal('finished'),
+  outcome: z.literal('cancelled'),
+  submitted_at: timestampSchema,
+  started_at: timestampSchema.nullable(),
+  finished_at: timestampSchema,
+  links: terminalLinksSchema,
+});
 const inspectionResponseSchema = z.union([
   queuedResponseSchema,
   processingResponseSchema,
@@ -105,6 +97,7 @@ const inspectionResponseSchema = z.union([
 
 type SubmitTranscriptionJobParameters = Readonly<{
   sourceUrl: string;
+  idempotencyKey: string;
   signal: AbortSignal;
 }>;
 
@@ -118,6 +111,48 @@ type InspectTranscriptionJobParameters = Readonly<{
 }>;
 
 type ActiveLinksResponse = z.infer<typeof activeLinksSchema>;
+const errorResponseSchema = z.object({
+  error: z.object({
+    code: z.enum(publicErrorCodes),
+    message: z.string().min(1),
+  }),
+});
+
+type PublicErrorResponse = z.infer<typeof errorResponseSchema>;
+
+const parseRetryAfterSeconds = (value: string | null): number => {
+  if (value === null || !/^\d+$/u.test(value.trim())) {
+    return 0;
+  }
+
+  const seconds = Number(value);
+  return Number.isSafeInteger(seconds) ? seconds : 0;
+};
+
+const classifySubmitError = ({
+  response,
+  body,
+}: Readonly<{ response: Response; body: unknown | null }>): SubmitTranscriptionJobResult | null => {
+  const parsed = errorResponseSchema.safeParse(body);
+
+  if (!parsed.success) {
+    return null;
+  }
+
+  const error: PublicErrorResponse['error'] = parsed.data.error;
+
+  switch (error.code) {
+    case 'idempotency_conflict':
+      return { kind: 'idempotency-conflict' };
+    case 'transcription_capacity_exceeded':
+      return { kind: 'capacity-exceeded', retryAfterSeconds: parseRetryAfterSeconds(response.headers.get('Retry-After')) };
+    case 'job_store_unavailable':
+      return { kind: 'store-unavailable' };
+    default:
+      return response.status >= 500 ? { kind: 'network-unavailable' } : { kind: 'backend-rejected' };
+  }
+};
+
 
 
 const isSameOriginRelativePath = (value: string): boolean => {
@@ -156,13 +191,20 @@ const readJson = async (response: Response): Promise<unknown | null> => {
   }
 };
 
-export const submitTranscriptionJob = async ({ sourceUrl, signal }: SubmitTranscriptionJobParameters): Promise<SubmitTranscriptionJobResult> => {
+export const submitTranscriptionJob = async ({
+  sourceUrl,
+  idempotencyKey,
+  signal,
+}: SubmitTranscriptionJobParameters): Promise<SubmitTranscriptionJobResult> => {
   let response: Response;
 
   try {
-    response = await fetch('/api/transcription-jobs', {
+    response = await fetch('/api/v1/transcription-jobs', {
       method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
+      headers: {
+        'Content-Type': 'application/json',
+        'Idempotency-Key': idempotencyKey,
+      },
       body: JSON.stringify({ url: sourceUrl.trim() }),
       signal,
     });
@@ -171,15 +213,21 @@ export const submitTranscriptionJob = async ({ sourceUrl, signal }: SubmitTransc
       return { kind: 'aborted' };
     }
 
-    return { kind: 'unavailable' };
-  }
-
-  if (response.status === 400 || response.status === 422) {
-    return { kind: 'backend-rejected' };
+    return { kind: 'network-unavailable' };
   }
 
   if (response.status !== 202) {
-    return { kind: 'unavailable' };
+    const classifiedError = classifySubmitError({ response, body: await readJson(response) });
+
+    if (classifiedError !== null) {
+      return classifiedError;
+    }
+
+    if (response.status === 400 || response.status === 422) {
+      return { kind: 'backend-rejected' };
+    }
+
+    return response.status >= 500 ? { kind: 'network-unavailable' } : { kind: 'contract-error' };
   }
 
   const body = await readJson(response);
