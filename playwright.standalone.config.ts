@@ -6,6 +6,9 @@ export default defineConfig({
   workers: 1,
   use: {
     trace: 'on-first-retry',
+    launchOptions: {
+      args: ['--host-resolver-rules=MAP textify.test 127.0.0.1'],
+    },
   },
   projects: [
     {

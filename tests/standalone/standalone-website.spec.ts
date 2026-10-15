@@ -21,6 +21,8 @@ const response = (status: number, body?: unknown, headers?: Readonly<Record<stri
   body,
 });
 
+const toUntrustworthyOrigin = (origin: string): string => origin.replace('127.0.0.1', 'textify.test');
+
 const configureAcceptedScenario = (
   inspections: ReadonlyArray<ApiResponse>,
   fallbackInspection?: ApiResponse,
@@ -183,6 +185,51 @@ test('should show the landing page at supplied viewports when a visitor opens th
   await expectLandingGeometry(page, testInfo);
   await expectNoHorizontalOverflow(page);
   await expect(page).toHaveScreenshot('landing.png', { fullPage: true });
+});
+
+test('should start a Transcription Job when the packaged website uses an untrustworthy HTTP origin', async ({
+  page,
+  standalone,
+}) => {
+  standalone.api.configure(
+    configureAcceptedScenario(
+      [response(200, processingJob, activeJobHeaders)],
+      response(200, processingJob, activeJobHeaders),
+    ),
+  );
+  const untrustworthyOrigin = toUntrustworthyOrigin(standalone.origin);
+
+  await page.goto(untrustworthyOrigin);
+  const cryptoSupport = await page.evaluate(() => ({
+    isSecureContext,
+    randomUuidType: typeof crypto.randomUUID,
+  }));
+
+  expect(cryptoSupport).toEqual({ isSecureContext: false, randomUuidType: 'undefined' });
+
+  await page.getByLabel('Video link').fill(sourceUrl);
+  await page.getByRole('button', { name: 'Transcribe' }).click();
+
+  await expect(page.getByRole('article', { name: 'Transcription status' })).toBeVisible();
+  await expect
+    .poll(() => standalone.requests().filter((request) => request.method === 'POST'))
+    .toHaveLength(1);
+  expect(standalone.requests()[0].headers['idempotency-key']).toMatch(
+    /^[0-9a-f]{8}-[0-9a-f]{4}-4[0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/u,
+  );
+});
+
+test('should omit Cross-Origin-Opener-Policy when the packaged website responds over HTTP', async ({
+  page,
+  standalone,
+}) => {
+  const navigationResponse = await page.goto(toUntrustworthyOrigin(standalone.origin));
+
+  if (navigationResponse === null) {
+    throw new Error('Expected the packaged website navigation to return an HTTP response.');
+  }
+
+  expect(navigationResponse.headers()).not.toHaveProperty('cross-origin-opener-policy');
 });
 
 test('should show truthful active work and cancel it when the API returns queued then processing', async ({

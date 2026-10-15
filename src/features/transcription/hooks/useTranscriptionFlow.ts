@@ -7,6 +7,7 @@ import {
   writeStoredCurrentTranscription,
 } from '../services/currentTranscriptionStorage';
 import { cancelTranscriptionJob, inspectTranscriptionJob, submitTranscriptionJob } from '../services/transcriptionJobs';
+import { createRandomUuid } from '../utils/createRandomUuid';
 import type { StoredCurrentTranscription } from '../services/currentTranscriptionStorage';
 import type { CapabilityLinks, TranscriptionResult, TranscriptView } from '../types';
 
@@ -16,28 +17,28 @@ export type TranscriptionFlowState =
   | Readonly<{ status: 'queued'; operationId: string; submittedUrl: string; links: CapabilityLinks; restored: boolean }>
   | Readonly<{ status: 'processing'; operationId: string; submittedUrl: string; links: CapabilityLinks; restored: boolean }>
   | Readonly<{
-      status: 'temporary-interruption';
-      operationId: string;
-      submittedUrl: string;
-      links: CapabilityLinks;
-      restored: boolean;
-    }>
+    status: 'temporary-interruption';
+    operationId: string;
+    submittedUrl: string;
+    links: CapabilityLinks;
+    restored: boolean;
+  }>
   | Readonly<{
-      status: 'succeeded';
-      operationId: string;
-      submittedUrl: string;
-      result: TranscriptionResult;
-      transcriptView: TranscriptView;
-    }>
+    status: 'succeeded';
+    operationId: string;
+    submittedUrl: string;
+    result: TranscriptionResult;
+    transcriptView: TranscriptView;
+  }>
   | Readonly<{ status: 'terminal-failure'; submittedUrl: string }>
   | Readonly<{
-      status: 'error';
-      operationId: string;
-      submittedUrl: string;
-      message: string;
-      idempotencyKey: string | null;
-      retryAfterUntil: number | null;
-    }>;
+    status: 'error';
+    operationId: string;
+    submittedUrl: string;
+    message: string;
+    idempotencyKey: string | null;
+    retryAfterUntil: number | null;
+  }>;
 
 export type UseTranscriptionFlowResult = Readonly<{
   inputValue: string;
@@ -421,7 +422,7 @@ export const useTranscriptionFlow = (): UseTranscriptionFlowResult => {
 
     pendingSubmissionKeyRef.current = null;
     const cancellationUrl = state.links.cancel;
-    const operationId = crypto.randomUUID();
+    const operationId = createRandomUuid();
     operationIdRef.current = operationId;
     persistedOperationIdRef.current =
       writeStoredCurrentTranscription({ version: 1, kind: 'cleared', operationId }) === 'written' ? operationId : null;
@@ -481,9 +482,9 @@ export const useTranscriptionFlow = (): UseTranscriptionFlowResult => {
     const idempotencyKey =
       state.status === 'error' && pendingSubmissionKeyRef.current !== null
         ? pendingSubmissionKeyRef.current
-        : crypto.randomUUID();
+        : createRandomUuid();
     pendingSubmissionKeyRef.current = idempotencyKey;
-    const operationId = crypto.randomUUID();
+    const operationId = createRandomUuid();
     submissionControllerRef.current?.abort();
     const controller = new AbortController();
     submissionControllerRef.current = controller;
