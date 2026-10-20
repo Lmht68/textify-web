@@ -71,6 +71,17 @@ case "$authority" in
     fi
     ;;
 esac
+dns_resolver=$(awk '$1 == "nameserver" { print $2; exit }' /etc/resolv.conf)
+if [ -z "$dns_resolver" ]; then
+  fail 'Container DNS resolver is unavailable.'
+fi
+
+case "$dns_resolver" in
+  *:*)
+    dns_resolver="[$dns_resolver]"
+    ;;
+esac
+
 
 template=/etc/nginx/templates/textify.conf.template
 target=/etc/nginx/conf.d/textify.conf
@@ -80,6 +91,7 @@ trap 'rm -f "$temporary"' EXIT HUP INT TERM
 sed \
   -e "s|@TEXTIFY_API_UPSTREAM@|${api_upstream}|g" \
   -e "s|@TEXTIFY_API_SNI_HOST@|${sni_host}|g" \
+  -e "s|@TEXTIFY_DNS_RESOLVER@|${dns_resolver}|g" \
   "$template" > "$temporary"
 mv "$temporary" "$target"
 trap - EXIT HUP INT TERM

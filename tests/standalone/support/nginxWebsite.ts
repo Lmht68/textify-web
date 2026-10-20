@@ -180,48 +180,93 @@ export const createNginxWebsiteHarness = ({
     },
     assertServiceDnsUpstreamWorks: async () => {
       const networkName = `textify-network-${resourceSuffix}`;
-      const apiContainerName = createContainerName('api');
-      const apiServer = [
+      const requestPath = '/api/probe?source=compose';
+      const createApiServer = (generation: string): string => [
         "const { createServer } = require('node:http');",
         "createServer((request, response) => {",
-        "if (request.url !== '/api/probe?source=compose') { response.statusCode = 404; response.end(); return; }",
-        "response.setHeader('content-type', 'text/plain'); response.end(request.url);",
+        `if (request.url !== '${requestPath}') { response.statusCode = 404; response.end(); return; }`,
+        `response.setHeader('content-type', 'text/plain'); response.end('${generation}:' + request.url);`,
         "}).listen(8182, '0.0.0.0');",
       ].join('');
+      const startApiContainer = async (containerName: string, generation: string): Promise<void> => {
+        containers.add(containerName);
+        await requireDocker(
+          [
+            'run',
+            '--detach',
+            '--rm',
+            '--name',
+            containerName,
+            '--network',
+            networkName,
+            '--network-alias',
+            'api',
+            'node:22.22.2-alpine',
+            'node',
+            '--eval',
+            createApiServer(generation),
+          ],
+          projectRoot,
+        );
+      };
+      const waitForGeneration = async (origin: string, generation: string): Promise<void> => {
+        let lastResponse: Readonly<{ status: number; body: string }> | undefined;
+
+        for (let attempt = 0; attempt < 50; attempt += 1) {
+          lastResponse = await requestText(origin, requestPath);
+
+          if (lastResponse.status === 200 && lastResponse.body === `${generation}:${requestPath}`) {
+            return;
+          }
+
+          await pause(100);
+        }
+
+        throw new Error(
+          `Service-DNS upstream did not reach API generation ${generation}: ${lastResponse?.status} ${lastResponse?.body}`,
+        );
+      };
 
       networks.add(networkName);
       await requireDocker(['network', 'create', networkName], projectRoot);
-      containers.add(apiContainerName);
+
+      const initialApiContainerName = createContainerName('api-initial');
+      await startApiContainer(initialApiContainerName, 'initial');
+      const initialApiAddress = await requireDocker(
+        ['inspect', '--format', `{{with index .NetworkSettings.Networks "${networkName}"}}{{.IPAddress}}{{end}}`, initialApiContainerName],
+        projectRoot,
+      );
+      const { origin } = await startContainer({
+        apiUpstream: 'http://api:8182',
+        networkName,
+      });
+      await waitForGeneration(origin, 'initial');
+
+      await requireDocker(['rm', '--force', initialApiContainerName], projectRoot);
+      const staleAddressContainerName = createContainerName('api-stale-address');
+      containers.add(staleAddressContainerName);
       await requireDocker(
         [
           'run',
           '--detach',
           '--rm',
           '--name',
-          apiContainerName,
+          staleAddressContainerName,
           '--network',
           networkName,
-          '--network-alias',
-          'api',
+          '--ip',
+          initialApiAddress,
           'node:22.22.2-alpine',
           'node',
           '--eval',
-          apiServer,
+          'setInterval(() => undefined, 1_000);',
         ],
         projectRoot,
       );
 
-      const { origin } = await startContainer({
-        apiUpstream: 'http://api:8182',
-        networkName,
-      });
-      const response = await requestText(origin, '/api/probe?source=compose');
-
-      if (response.status !== 200 || response.body !== '/api/probe?source=compose') {
-        throw new Error(
-          `Service-DNS upstream did not receive the original request URI: ${response.status} ${response.body}`,
-        );
-      }
+      const replacementApiContainerName = createContainerName('api-replacement');
+      await startApiContainer(replacementApiContainerName, 'replacement');
+      await waitForGeneration(origin, 'replacement');
     },
     dispose: async () => {
       const cleanupFailures: Error[] = [];

@@ -1,6 +1,11 @@
 log_format api_sanitized '$remote_addr [$time_local] "$request_method /api" $status $body_bytes_sent';
 
 server {
+    resolver @TEXTIFY_DNS_RESOLVER@ valid=1s ipv6=off;
+    resolver_timeout 2s;
+    set $textify_api_upstream "@TEXTIFY_API_UPSTREAM@";
+    set $textify_api_sni_host "@TEXTIFY_API_SNI_HOST@";
+
     listen 80;
     listen [::]:80;
     server_name _;
@@ -30,10 +35,10 @@ server {
     location = /api {
         access_log /var/log/nginx/api.access.log api_sanitized;
         proxy_http_version 1.1;
-        proxy_pass @TEXTIFY_API_UPSTREAM@;
+        proxy_pass $textify_api_upstream$request_uri;
         proxy_redirect off;
         proxy_ssl_server_name on;
-        proxy_ssl_name @TEXTIFY_API_SNI_HOST@;
+        proxy_ssl_name $textify_api_sni_host;
         proxy_set_header Connection "";
         proxy_set_header Host $http_host;
         proxy_set_header X-Real-IP $remote_addr;
@@ -46,10 +51,10 @@ server {
     location ^~ /api/ {
         access_log /var/log/nginx/api.access.log api_sanitized;
         proxy_http_version 1.1;
-        proxy_pass @TEXTIFY_API_UPSTREAM@;
+        proxy_pass $textify_api_upstream$request_uri;
         proxy_redirect off;
         proxy_ssl_server_name on;
-        proxy_ssl_name @TEXTIFY_API_SNI_HOST@;
+        proxy_ssl_name $textify_api_sni_host;
         proxy_set_header Connection "";
         proxy_set_header Host $http_host;
         proxy_set_header X-Real-IP $remote_addr;

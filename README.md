@@ -48,6 +48,7 @@ docker compose --profile gpu up --build --detach --wait
 ```
 
 The root Compose application configures this image with `TEXTIFY_API_UPSTREAM=http://api:8182` so Nginx reaches the API over the shared Docker network.
+Nginx refreshes Docker service-DNS results at runtime, so restarting or recreating the API container does not require restarting the frontend.
 
 ## Browser API boundary
 
